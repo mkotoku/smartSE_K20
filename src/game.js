@@ -1,16 +1,26 @@
 (function () {
   const { Fighter, rectsOverlap } = window.StreetClashFighter;
+  const THREE = window.THREE;
+
+  const ARENA_WIDTH = 960;
+  const ARENA_DEPTH = 300;
 
   const difficultyProfiles = {
-    easy: { reaction: 0.52, aggression: 0.4, defense: 0.28, speed: 230, punish: 0.22 },
-    normal: { reaction: 0.34, aggression: 0.62, defense: 0.45, speed: 265, punish: 0.38 },
-    hard: { reaction: 0.22, aggression: 0.78, defense: 0.62, speed: 302, punish: 0.58 }
+    easy: { reaction: 0.54, aggression: 0.4, defense: 0.28, speed: 220, punish: 0.2 },
+    normal: { reaction: 0.34, aggression: 0.62, defense: 0.45, speed: 258, punish: 0.38 },
+    hard: { reaction: 0.22, aggression: 0.78, defense: 0.62, speed: 296, punish: 0.58 }
   };
 
   const fighterSkins = {
     ryu: { color: "#2f80ed", accent: "#ffd166", dark: "#111722" },
     ken: { color: "#e94f64", accent: "#ffd166", dark: "#201016" },
     chun: { color: "#56d6a6", accent: "#7df9ff", dark: "#09231f" }
+  };
+
+  const stageThemes = {
+    metro: { floor: "#2e3447", back: "#11162d", fog: "#1d2441", neon: "#56d6a6" },
+    dojo: { floor: "#4a3427", back: "#2c303d", fog: "#34291f", neon: "#ffd166" },
+    harbor: { floor: "#263247", back: "#47235d", fog: "#172030", neon: "#7df9ff" }
   };
 
   class SoundEngine {
@@ -60,20 +70,26 @@
 
   class Game {
     constructor(canvas, options) {
+      if (!THREE) throw new Error("Three.js is required for 3D mode.");
       this.canvas = canvas;
-      this.ctx = canvas.getContext("2d");
       this.width = canvas.width;
       this.height = canvas.height;
-      this.floorY = 438;
       this.input = options.input;
       this.onRoundEnd = options.onRoundEnd;
       this.settings = options.settings;
       this.sound = new SoundEngine(this.settings.volume);
       this.player = new Fighter({ name: "PLAYER", x: 210, color: "#2f80ed", accent: "#ffd166", dark: "#111722" });
       this.cpu = new Fighter({ name: "CPU", x: 750, color: "#e94f64", accent: "#56d6a6", dark: "#201016", isCpu: true });
+      this.projectiles = [];
+      this.effects = [];
+      this.combo = { owner: null, hits: 0, damage: 0, timer: 0 };
+      this.bestPlayerCombo = 0;
       this.roundTime = 60;
       this.finished = false;
       this.matchFinished = false;
+      this.playerRounds = 0;
+      this.cpuRounds = 0;
+      this.roundNumber = 1;
       this.cpuThinkTimer = 0;
       this.cpuPlan = "idle";
       this.cpuMood = "measuring";
@@ -82,31 +98,132 @@
       this.slowMotion = 0;
       this.banner = "";
       this.bannerTimer = 0;
-      this.effects = [];
-      this.projectiles = [];
-      this.combo = { owner: null, hits: 0, damage: 0, timer: 0 };
-      this.bestPlayerCombo = 0;
-      this.playerRounds = 0;
-      this.cpuRounds = 0;
-      this.roundNumber = 1;
       this.lastResult = null;
+      this.init3D();
+    }
+
+    init3D() {
+      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: false });
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      this.renderer.setSize(this.width, this.height, false);
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
+      this.camera.position.set(0, 5.4, 8.8);
+      this.camera.lookAt(0, 1.1, 0);
+
+      this.scene.add(new THREE.HemisphereLight(0xbfd7ff, 0x1b1b22, 1.2));
+      const key = new THREE.DirectionalLight(0xffffff, 2.2);
+      key.position.set(-4, 8, 5);
+      key.castShadow = true;
+      this.scene.add(key);
+      this.rimLight = new THREE.PointLight(0x56d6a6, 2.2, 12);
+      this.rimLight.position.set(0, 3, -3.5);
+      this.scene.add(this.rimLight);
+
+      this.stageGroup = new THREE.Group();
+      this.scene.add(this.stageGroup);
+      this.playerRig = this.createFighterRig();
+      this.cpuRig = this.createFighterRig();
+      this.scene.add(this.playerRig.group, this.cpuRig.group);
+      this.projectileGroup = new THREE.Group();
+      this.effectGroup = new THREE.Group();
+      this.scene.add(this.projectileGroup, this.effectGroup);
+      this.applyStage();
+    }
+
+    applyStage() {
+      const theme = stageThemes[this.settings.stage] || stageThemes.metro;
+      this.scene.background = new THREE.Color(theme.back);
+      this.scene.fog = new THREE.Fog(theme.fog, 8, 18);
+      this.rimLight.color.set(theme.neon);
+      this.stageGroup.clear();
+
+      const floor = new THREE.Mesh(
+        new THREE.BoxGeometry(12.8, 0.18, 5.2),
+        new THREE.MeshStandardMaterial({ color: theme.floor, roughness: 0.55, metalness: 0.12 })
+      );
+      floor.receiveShadow = true;
+      floor.position.y = -0.09;
+      this.stageGroup.add(floor);
+
+      const grid = new THREE.GridHelper(12.8, 16, theme.neon, 0x4c5265);
+      grid.position.y = 0.012;
+      this.stageGroup.add(grid);
+
+      for (let i = 0; i < 10; i++) {
+        const height = 1.6 + (i % 4) * 0.42;
+        const block = new THREE.Mesh(
+          new THREE.BoxGeometry(0.48, height, 0.34),
+          new THREE.MeshStandardMaterial({ color: i % 2 ? 0x242a3f : 0x303854, roughness: 0.7 })
+        );
+        block.position.set(-6 + i * 1.3, height / 2 - 0.02, -2.95);
+        this.stageGroup.add(block);
+      }
+
+      for (let i = 0; i < 7; i++) {
+        const sign = new THREE.Mesh(
+          new THREE.BoxGeometry(0.72, 0.08, 0.08),
+          new THREE.MeshBasicMaterial({ color: theme.neon })
+        );
+        sign.position.set(-4.7 + i * 1.55, 2.0 + Math.sin(i) * 0.3, -2.72);
+        this.stageGroup.add(sign);
+      }
+    }
+
+    createFighterRig() {
+      const group = new THREE.Group();
+      const material = (color, emissive = 0x000000) => new THREE.MeshStandardMaterial({
+        color,
+        emissive,
+        emissiveIntensity: 0.18,
+        roughness: 0.42,
+        metalness: 0.08
+      });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.82, 0.32), material(0x2f80ed));
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), material(0xffd166));
+      const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.48, 8, 12), material(0x2f80ed));
+      const armR = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.48, 8, 12), material(0x2f80ed));
+      const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 8, 12), material(0x2f80ed));
+      const legR = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 8, 12), material(0x2f80ed));
+      const attack = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.34, depthWrite: false })
+      );
+      attack.visible = false;
+      group.add(body, head, armL, armR, legL, legR, attack);
+      [body, head, armL, armR, legL, legR].forEach((part) => {
+        part.castShadow = true;
+        part.receiveShadow = true;
+      });
+      return { group, body, head, armL, armR, legL, legR, attack };
     }
 
     reset(settings) {
       this.settings = settings || this.settings;
       this.sound.setVolume(this.settings.volume);
       this.applyCosmetics();
+      this.applyStage();
       this.playerRounds = 0;
       this.cpuRounds = 0;
       this.roundNumber = 1;
       this.matchFinished = false;
       this.lastResult = null;
+      this.bestPlayerCombo = 0;
       this.startRound();
+    }
+
+    applyCosmetics() {
+      Object.assign(this.player, fighterSkins[this.settings.fighter] || fighterSkins.ryu);
     }
 
     startRound() {
       this.player.reset(210);
       this.cpu.reset(750);
+      this.cpu.z = 0;
+      this.player.z = 0;
       this.roundTime = 60;
       this.finished = false;
       this.cpuThinkTimer = 0;
@@ -117,14 +234,11 @@
       this.slowMotion = 0;
       this.effects = [];
       this.projectiles = [];
+      this.clearThreeGroup(this.projectileGroup);
+      this.clearThreeGroup(this.effectGroup);
       this.combo = { owner: null, hits: 0, damage: 0, timer: 0 };
       this.showBanner(`ROUND ${this.roundNumber}`, 1.0);
       this.sound.play("round");
-    }
-
-    applyCosmetics() {
-      const skin = fighterSkins[this.settings.fighter] || fighterSkins.ryu;
-      Object.assign(this.player, skin);
     }
 
     update(dt) {
@@ -142,7 +256,6 @@
         this.updateEffects(dt);
         return;
       }
-
       this.roundTime = Math.max(0, this.roundTime - dt);
       this.bannerTimer = Math.max(0, this.bannerTimer - dt);
       this.shake = Math.max(0, this.shake - dt * 35);
@@ -153,8 +266,8 @@
       this.handlePlayerInput();
       this.handleCpu(dt);
       this.updateProjectiles(dt);
-      this.player.update(dt, this.width);
-      this.cpu.update(dt, this.width);
+      this.player.update(dt, ARENA_WIDTH, ARENA_DEPTH);
+      this.cpu.update(dt, ARENA_WIDTH, ARENA_DEPTH);
       this.separateFighters();
       this.resolveAttack(this.player, this.cpu);
       this.resolveAttack(this.cpu, this.player);
@@ -168,9 +281,12 @@
       p.guard = this.input.isDown("guard") && p.onGround && !p.attack;
       if (!p.canAct()) return;
       const speed = p.guard ? 92 : 306;
+      const depthSpeed = p.guard ? 76 : 240;
       if (!p.attack) {
         if (this.input.isDown("left")) p.vx = -speed;
         if (this.input.isDown("right")) p.vx = speed;
+        if (this.input.isDown("forward")) p.vz = -depthSpeed;
+        if (this.input.isDown("back")) p.vz = depthSpeed;
         if (this.input.consume("jump") && p.onGround && !p.guard) {
           p.vy = -680;
           p.onGround = false;
@@ -190,22 +306,26 @@
       const profile = difficultyProfiles[this.settings.difficulty] || difficultyProfiles.normal;
       cpu.guard = false;
       if (!cpu.canAct() || cpu.attack) return;
-
       this.cpuThinkTimer -= dt;
-      const distance = Math.abs(player.x - cpu.x);
+      const distanceX = Math.abs(player.x - cpu.x);
+      const distanceZ = Math.abs(player.z - cpu.z);
+      const distance = Math.hypot(distanceX, distanceZ * 1.7);
       if (this.cpuThinkTimer <= 0) {
         this.cpuThinkTimer = profile.reaction + Math.random() * 0.13;
-        if (player.attack && distance < 135 && Math.random() < profile.defense) {
+        if (distanceZ > 38) {
+          this.cpuPlan = "alignDepth";
+          this.cpuMood = "sidestep";
+        } else if (player.attack && distance < 140 && Math.random() < profile.defense) {
           this.cpuPlan = "guard";
           this.cpuMood = "reading";
-        } else if (player.attack && distance < 115 && Math.random() < profile.punish) {
+        } else if (player.attack && distance < 120 && Math.random() < profile.punish) {
           this.cpuPlan = "punish";
           this.cpuMood = "punish";
-        } else if (distance > 210) {
+        } else if (distanceX > 210) {
           this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? "special" : "approach";
           this.cpuMood = "closing";
-        } else if (distance < 58) {
-          this.cpuPlan = Math.random() < 0.55 ? "throw" : "retreat";
+        } else if (distance < 66) {
+          this.cpuPlan = Math.random() < 0.5 ? "throw" : "retreat";
           this.cpuMood = "scramble";
         } else if (Math.random() < profile.aggression) {
           this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : Math.random() < 0.56 ? "light" : "heavy";
@@ -216,17 +336,27 @@
         }
       }
 
-      if (this.cpuPlan === "approach") cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
-      if (this.cpuPlan === "retreat") cpu.vx = -Math.sign(player.x - cpu.x) * profile.speed * 0.78;
+      if (this.cpuPlan === "alignDepth") cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.86;
+      if (this.cpuPlan === "approach") {
+        cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
+        if (distanceZ > 18) cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.65;
+      }
+      if (this.cpuPlan === "retreat") {
+        cpu.vx = -Math.sign(player.x - cpu.x) * profile.speed * 0.74;
+        cpu.vz = (Math.random() < 0.5 ? -1 : 1) * profile.speed * 0.38;
+      }
       if (this.cpuPlan === "guard") cpu.guard = cpu.onGround;
       if (this.cpuPlan === "punish") {
-        if (distance < 115) this.tryAttack(cpu, "heavy");
+        if (distance < 125 && distanceZ < 52) this.tryAttack(cpu, "heavy");
         else cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
       }
       if (["light", "heavy", "special", "super", "throw"].includes(this.cpuPlan)) {
-        const needRange = this.cpuPlan === "throw" ? 60 : this.cpuPlan === "special" || this.cpuPlan === "super" ? 150 : 118;
-        if (distance < needRange) this.tryAttack(cpu, this.cpuPlan);
-        else cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
+        const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "super" ? 158 : 126;
+        if (distance < needRange && distanceZ < 62) this.tryAttack(cpu, this.cpuPlan);
+        else {
+          cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
+          if (distanceZ > 20) cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.75;
+        }
       }
     }
 
@@ -241,17 +371,24 @@
     }
 
     spawnWave(fighter, type) {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(type === "super" ? 0.34 : 0.22, 24, 16),
+        new THREE.MeshBasicMaterial({ color: type === "super" ? 0xffd166 : 0x7df9ff, transparent: true, opacity: 0.78 })
+      );
+      this.projectileGroup.add(mesh);
       this.projectiles.push({
         owner: fighter,
         x: fighter.x + fighter.facing * 72,
         y: fighter.y - 72,
+        z: fighter.z,
         vx: fighter.facing * (type === "super" ? 620 : 480),
         radius: type === "super" ? 34 : 22,
         damage: type === "super" ? 18 : 10,
         knockback: type === "super" ? 430 : 260,
         life: 0.8,
         super: type === "super",
-        hit: false
+        hit: false,
+        mesh
       });
     }
 
@@ -260,7 +397,11 @@
         projectile.x += projectile.vx * dt;
         projectile.life -= dt;
       }
-      this.projectiles = this.projectiles.filter((projectile) => projectile.life > 0 && projectile.x > -80 && projectile.x < this.width + 80 && !projectile.hit);
+      this.projectiles = this.projectiles.filter((projectile) => {
+        const keep = projectile.life > 0 && projectile.x > -80 && projectile.x < ARENA_WIDTH + 80 && !projectile.hit;
+        if (!keep && projectile.mesh.parent) projectile.mesh.parent.remove(projectile.mesh);
+        return keep;
+      });
     }
 
     resolveProjectiles() {
@@ -269,13 +410,16 @@
         const box = {
           x: projectile.x - projectile.radius,
           y: projectile.y - projectile.radius,
+          z: projectile.z - projectile.radius,
           width: projectile.radius * 2,
-          height: projectile.radius * 2
+          height: projectile.radius * 2,
+          depth: projectile.radius * 2
         };
         if (!rectsOverlap(box, defender.bounds)) continue;
         const blocked = defender.guard && defender.facing === -projectile.owner.facing && defender.onGround;
         const attack = {
           name: projectile.super ? "super" : "special",
+          label: projectile.super ? "Meteor Wave" : "Surge Wave",
           damage: projectile.damage,
           knockback: projectile.knockback,
           hitStun: projectile.super ? 0.44 : 0.28,
@@ -283,7 +427,7 @@
           sound: projectile.super ? "super" : "hitSpecial",
           spark: projectile.super ? "#ffffff" : "#7df9ff"
         };
-        this.applyHit(projectile.owner, defender, attack, blocked, projectile.x, this.floorY + projectile.y);
+        this.applyHit(projectile.owner, defender, attack, blocked, projectile.x, projectile.y, projectile.z);
         projectile.hit = true;
       }
     }
@@ -294,13 +438,18 @@
     }
 
     separateFighters() {
-      const gap = this.cpu.x - this.player.x;
-      const minGap = 50;
-      if (Math.abs(gap) >= minGap) return;
-      const push = (minGap - Math.abs(gap)) / 2;
-      const dir = gap >= 0 ? 1 : -1;
-      this.player.x -= push * dir;
-      this.cpu.x += push * dir;
+      const dx = this.cpu.x - this.player.x;
+      const dz = this.cpu.z - this.player.z;
+      const dist = Math.hypot(dx, dz);
+      const minGap = 52;
+      if (dist >= minGap || dist === 0) return;
+      const push = (minGap - dist) / 2;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      this.player.x -= push * nx;
+      this.player.z -= push * nz;
+      this.cpu.x += push * nx;
+      this.cpu.z += push * nz;
     }
 
     resolveAttack(attacker, defender) {
@@ -309,20 +458,20 @@
       if (!attackBox || !rectsOverlap(attackBox, defender.bounds)) return;
       const blocked = !attacker.attack.unblockable && defender.guard && defender.facing === -attacker.facing && defender.onGround;
       const sparkX = attacker.facing > 0 ? attackBox.x + attackBox.width : attackBox.x;
-      const sparkY = this.floorY + attackBox.y + attackBox.height * 0.45;
-      this.applyHit(attacker, defender, attacker.attack, blocked, sparkX, sparkY);
+      const sparkY = attackBox.y + attackBox.height * 0.45;
+      const sparkZ = attacker.z;
+      this.applyHit(attacker, defender, attacker.attack, blocked, sparkX, sparkY, sparkZ);
       attacker.attackHasHit = true;
     }
 
-    applyHit(attacker, defender, attack, blocked, sparkX, sparkY) {
+    applyHit(attacker, defender, attack, blocked, sparkX, sparkY, sparkZ) {
       const damage = defender.takeHit(attack, attacker.facing, blocked);
       attacker.gainMeter(attack.meterGain || 0);
       this.hitStop = blocked ? 0.035 : attack.name === "super" ? 0.12 : 0.065;
       this.shake = Math.max(this.shake, blocked ? 3 : attack.name === "super" ? 15 : 8);
       this.slowMotion = attack.name === "super" && !blocked ? 0.32 : this.slowMotion;
       this.sound.play(blocked ? "block" : attack.sound);
-      this.spawnSpark(sparkX, sparkY, blocked ? "#7df9ff" : attack.spark, attack.name, blocked);
-
+      this.spawnSpark(sparkX, sparkY, sparkZ, blocked ? "#7df9ff" : attack.spark, attack.name, blocked);
       if (!blocked) {
         const sameOwner = this.combo.owner === attacker && this.combo.timer > 0;
         this.combo.owner = attacker;
@@ -336,31 +485,40 @@
       }
     }
 
-    spawnSpark(x, y, color, type, blocked) {
+    spawnSpark(x, y, z, color, type, blocked) {
       const count = type === "super" ? 30 : blocked ? 9 : 18;
       for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(blocked ? 0.035 : 0.055, 8, 8),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 })
+        );
+        this.effectGroup.add(mesh);
         const angle = (Math.PI * 2 * i) / count + Math.random() * 0.35;
-        const speed = (blocked ? 90 : 160) + Math.random() * (type === "super" ? 300 : 170);
+        const speed = (blocked ? 1.2 : 2.0) + Math.random() * (type === "super" ? 3.2 : 1.8);
         this.effects.push({
-          x,
-          y,
+          x, y, z,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
-          size: blocked ? 3 : 4 + Math.random() * 6,
+          vz: (Math.random() - 0.5) * speed,
           life: 0.28 + Math.random() * 0.24,
-          color
+          mesh
         });
       }
     }
 
     updateEffects(dt) {
       for (const effect of this.effects) {
-        effect.x += effect.vx * dt;
-        effect.y += effect.vy * dt;
-        effect.vy += 420 * dt;
+        effect.x += effect.vx * 70 * dt;
+        effect.y += effect.vy * 70 * dt;
+        effect.z += effect.vz * 70 * dt;
+        effect.vy -= 4.2 * dt;
         effect.life -= dt;
       }
-      this.effects = this.effects.filter((effect) => effect.life > 0);
+      this.effects = this.effects.filter((effect) => {
+        const keep = effect.life > 0;
+        if (!keep && effect.mesh.parent) effect.mesh.parent.remove(effect.mesh);
+        return keep;
+      });
     }
 
     showBanner(text, seconds) {
@@ -379,7 +537,6 @@
         else winner = this.player.hp > this.cpu.hp ? "player" : "cpu";
       }
       if (!winner) return;
-
       this.finished = true;
       if (winner === "player") this.playerRounds += 1;
       if (winner === "cpu") this.cpuRounds += 1;
@@ -389,7 +546,6 @@
       this.cpu.losePose = winner === "player";
       this.showBanner(winner === "draw" ? "DRAW" : winner === "player" ? "ROUND WIN" : "ROUND LOST", 1.2);
       this.sound.play(winner === "player" ? "win" : "lose");
-
       window.setTimeout(() => {
         if (this.playerRounds >= 2 || this.cpuRounds >= 2) {
           this.matchFinished = true;
@@ -408,133 +564,122 @@
     }
 
     draw() {
-      const ctx = this.ctx;
-      const shakeX = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
-      const shakeY = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
-      ctx.clearRect(0, 0, this.width, this.height);
-      ctx.save();
-      ctx.translate(shakeX, shakeY);
-      this.drawBackground(ctx);
-      this.drawProjectiles(ctx);
-      this.player.draw(ctx, this.floorY, performance.now());
-      this.cpu.draw(ctx, this.floorY, performance.now());
-      this.drawEffects(ctx);
-      ctx.restore();
-      this.drawMessage(ctx);
+      const time = performance.now();
+      this.syncRig(this.playerRig, this.player, time);
+      this.syncRig(this.cpuRig, this.cpu, time);
+      this.syncProjectiles();
+      this.syncEffects();
+      this.syncCamera();
+      this.drawMessage3D();
+      this.renderer.render(this.scene, this.camera);
     }
 
-    drawBackground(ctx) {
-      const stage = this.settings.stage || "metro";
-      const sky = ctx.createLinearGradient(0, 0, 0, this.height);
-      if (stage === "dojo") {
-        sky.addColorStop(0, "#1f2736");
-        sky.addColorStop(0.5, "#586070");
-        sky.addColorStop(1, "#242019");
-      } else if (stage === "harbor") {
-        sky.addColorStop(0, "#47235d");
-        sky.addColorStop(0.5, "#d56b4c");
-        sky.addColorStop(1, "#172030");
-      } else {
-        sky.addColorStop(0, "#11162d");
-        sky.addColorStop(0.48, "#283b5d");
-        sky.addColorStop(1, "#18191f");
-      }
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, this.width, this.height);
+    syncRig(rig, fighter, time) {
+      const pos = this.toWorld(fighter.x, fighter.y, fighter.z);
+      rig.group.position.copy(pos);
+      rig.group.rotation.y = fighter.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
+      rig.group.scale.setScalar(fighter.flash > 0 ? 1.08 : 1);
+      const body = new THREE.Color(fighter.flash > 0 ? "#fff6b8" : fighter.color);
+      const accent = new THREE.Color(fighter.accent);
+      [rig.body, rig.armL, rig.armR, rig.legL, rig.legR].forEach((part) => part.material.color.copy(body));
+      rig.head.material.color.copy(accent);
 
-      const time = performance.now() / 1000;
-      ctx.fillStyle = stage === "dojo" ? "#3a2f29" : stage === "harbor" ? "#27304a" : "#20243a";
-      for (let x = -20; x < this.width; x += 110) {
-        const h = 130 + Math.abs(Math.sin(x * 0.02)) * 95;
-        if (stage === "dojo") {
-          ctx.fillRect(x, this.floorY - 104, 78, 80);
-          ctx.fillStyle = "#ffd166";
-          ctx.fillRect(x + 10, this.floorY - 90, 58, 10);
-        } else {
-          ctx.fillRect(x, this.floorY - h - 24, 72, h);
-          ctx.fillStyle = Math.sin(time * 3 + x) > 0 ? "#ffd166" : "#56d6a6";
-          for (let y = this.floorY - h; y < this.floorY - 42; y += 30) {
-            ctx.fillRect(x + 14, y, 10, 12);
-            ctx.fillRect(x + 42, y + 5, 10, 12);
-          }
-        }
-        ctx.fillStyle = stage === "dojo" ? "#3a2f29" : stage === "harbor" ? "#27304a" : "#20243a";
+      const walk = fighter.state === "walk" ? Math.sin(time / 80) : 0;
+      const crouch = fighter.state === "guard" ? -0.12 : 0;
+      rig.body.position.set(0, 0.88 + crouch, 0);
+      rig.head.position.set(0, 1.46 + crouch + Math.sin(time / 260) * 0.02, 0);
+      rig.armL.position.set(-0.34, 0.94 + crouch, 0);
+      rig.armR.position.set(0.34, 0.94 + crouch, 0);
+      rig.legL.position.set(-0.16, 0.32, 0.05);
+      rig.legR.position.set(0.16, 0.32, -0.05);
+      rig.armL.rotation.z = 0.45;
+      rig.armR.rotation.z = -0.45;
+      rig.legL.rotation.z = walk * 0.35;
+      rig.legR.rotation.z = -walk * 0.35;
+      if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "super") {
+        rig.armR.position.x = 0.62;
+        rig.armR.rotation.z = -1.35;
+        rig.armR.rotation.x = fighter.state === "super" ? -0.75 : -0.25;
       }
+      if (fighter.state === "guard") {
+        rig.armL.position.set(-0.12, 1.16 + crouch, 0.2);
+        rig.armR.position.set(0.12, 1.16 + crouch, 0.2);
+        rig.armL.rotation.z = 1.1;
+        rig.armR.rotation.z = -1.1;
+      }
+      if (fighter.state === "down") rig.group.rotation.z = fighter.facing * 1.1;
+      else rig.group.rotation.z = 0;
 
-      ctx.fillStyle = stage === "harbor" ? "rgba(125, 249, 255, 0.22)" : "rgba(255, 209, 102, 0.28)";
-      for (let i = 0; i < 7; i++) {
-        const x = 90 + i * 130;
-        ctx.beginPath();
-        ctx.ellipse(x, this.floorY - 42 + Math.sin(time * 2 + i) * 3, 18, 34, 0, 0, Math.PI * 2);
-        ctx.fill();
+      const box = fighter.attackBox();
+      rig.attack.visible = Boolean(box);
+      if (box) {
+        rig.attack.scale.set(box.width / 70, box.height / 90, box.depth / 70);
+        rig.attack.position.set(fighter.facing * (0.55 + box.width / 140), 0.96, 0);
+        rig.attack.material.color.set(fighter.attack.name === "super" ? 0xffffff : fighter.attack.name === "special" ? 0x7df9ff : 0xffd166);
       }
-
-      ctx.fillStyle = "#34394c";
-      ctx.fillRect(0, this.floorY, this.width, this.height - this.floorY);
-      ctx.fillStyle = "#202331";
-      for (let x = -80 + (time * 35) % 80; x < this.width; x += 80) {
-        ctx.fillRect(x, this.floorY + 32, 48, 7);
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.fillRect(0, this.floorY, this.width, 4);
     }
 
-    drawProjectiles(ctx) {
+    syncProjectiles() {
       for (const projectile of this.projectiles) {
-        const gradient = ctx.createRadialGradient(projectile.x, this.floorY + projectile.y, 4, projectile.x, this.floorY + projectile.y, projectile.radius);
-        gradient.addColorStop(0, "#ffffff");
-        gradient.addColorStop(0.45, projectile.super ? "#ffd166" : "#7df9ff");
-        gradient.addColorStop(1, "rgba(125, 249, 255, 0)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(projectile.x, this.floorY + projectile.y, projectile.radius, 0, Math.PI * 2);
-        ctx.fill();
+        projectile.mesh.position.copy(this.toWorld(projectile.x, projectile.y, projectile.z));
+        projectile.mesh.scale.setScalar(1 + Math.sin(performance.now() / 70) * 0.08);
       }
     }
 
-    drawEffects(ctx) {
+    syncEffects() {
       for (const effect of this.effects) {
-        ctx.globalAlpha = Math.max(0, effect.life * 3);
-        ctx.fillStyle = effect.color;
-        ctx.beginPath();
-        ctx.arc(effect.x, effect.y, effect.size, 0, Math.PI * 2);
-        ctx.fill();
+        effect.mesh.position.copy(this.toWorld(effect.x, effect.y, effect.z));
+        effect.mesh.material.opacity = Math.max(0, effect.life * 3);
       }
-      ctx.globalAlpha = 1;
     }
 
-    drawMessage(ctx) {
-      if (this.bannerTimer > 0 && this.banner) {
-        ctx.save();
+    syncCamera() {
+      const midX = ((this.player.x + this.cpu.x) / 2 - ARENA_WIDTH / 2) / 75;
+      const midZ = (this.player.z + this.cpu.z) / 2 / 80;
+      const spread = Math.min(2.2, Math.abs(this.player.x - this.cpu.x) / 260);
+      const shakeX = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.015 : 0;
+      const shakeY = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.015 : 0;
+      this.camera.position.set(midX + shakeX, 5.1 + shakeY, 8.2 + spread + midZ * 0.25);
+      this.camera.lookAt(midX, 1.0, midZ);
+    }
+
+    drawMessage3D() {
+      if (!this.bannerMesh) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 128;
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+        this.bannerMesh = new THREE.Sprite(material);
+        this.bannerMesh.scale.set(4.8, 1.2, 1);
+        this.bannerMesh.position.set(0, 3.4, -1.5);
+        this.bannerMesh.renderOrder = 10;
+        this.scene.add(this.bannerMesh);
+        this.bannerCanvas = canvas;
+        this.bannerTexture = texture;
+      }
+      const ctx = this.bannerCanvas.getContext("2d");
+      ctx.clearRect(0, 0, this.bannerCanvas.width, this.bannerCanvas.height);
+      this.bannerMesh.visible = this.bannerTimer > 0 && Boolean(this.banner);
+      if (this.bannerMesh.visible) {
         ctx.globalAlpha = Math.min(1, this.bannerTimer * 2);
         ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.lineWidth = 8;
-        ctx.font = "900 46px system-ui, sans-serif";
+        ctx.strokeStyle = "rgba(0,0,0,0.8)";
+        ctx.lineWidth = 12;
+        ctx.font = "900 54px system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.strokeText(this.banner, this.width / 2, 158);
-        ctx.fillText(this.banner, this.width / 2, 158);
-        ctx.restore();
+        ctx.strokeText(this.banner, 256, 78);
+        ctx.fillText(this.banner, 256, 78);
+        this.bannerTexture.needsUpdate = true;
       }
+    }
 
-      if (this.combo.timer > 0 && this.combo.hits >= 2 && this.combo.owner === this.player) {
-        ctx.save();
-        ctx.fillStyle = "#ffd166";
-        ctx.font = "900 30px system-ui, sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText(`${this.combo.hits} HIT`, 48, 150);
-        ctx.font = "800 15px system-ui, sans-serif";
-        ctx.fillText(`${this.combo.damage} DAMAGE`, 50, 174);
-        ctx.restore();
-      }
+    toWorld(x, y, z) {
+      return new THREE.Vector3((x - ARENA_WIDTH / 2) / 75, -y / 92, z / 75);
+    }
 
-      ctx.save();
-      ctx.globalAlpha = 0.7;
-      ctx.fillStyle = "#dfe8ff";
-      ctx.font = "700 13px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`CPU: ${this.cpuMood.toUpperCase()}`, this.width / 2, this.height - 24);
-      ctx.restore();
+    clearThreeGroup(group) {
+      while (group.children.length) group.remove(group.children[0]);
     }
   }
 

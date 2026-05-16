@@ -3,6 +3,8 @@
     left: "Left",
     right: "Right",
     jump: "Jump",
+    forward: "Depth In",
+    back: "Depth Out",
     guard: "Guard",
     light: "Light",
     heavy: "Heavy",

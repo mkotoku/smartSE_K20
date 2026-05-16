@@ -19,6 +19,8 @@
         left: "KeyA",
         right: "KeyD",
         jump: "KeyW",
+        forward: "KeyQ",
+        back: "KeyE",
         guard: "KeyS",
         light: "KeyJ",
         heavy: "KeyK",

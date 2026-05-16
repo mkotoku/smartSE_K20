@@ -98,10 +98,13 @@
 
     reset(x = this.startX) {
       this.x = x;
+      this.z = 0;
       this.y = 0;
       this.vx = 0;
+      this.vz = 0;
       this.vy = 0;
       this.width = 50;
+      this.depth = 54;
       this.height = 112;
       this.facing = 1;
       this.hp = 100;
@@ -126,7 +129,9 @@
         x: this.x - this.width / 2,
         y: this.y - this.height,
         width: this.width,
-        height: this.height
+        height: this.height,
+        z: this.z - this.depth / 2,
+        depth: this.depth
       };
     }
 
@@ -158,7 +163,7 @@
       return true;
     }
 
-    update(dt, arenaWidth) {
+    update(dt, arenaWidth, arenaDepth = 260) {
       this.comboTimer = Math.max(0, this.comboTimer - dt);
       if (this.comboTimer <= 0 && !this.attack) this.comboChain = [];
 
@@ -176,6 +181,7 @@
 
       this.vy += 1600 * dt;
       this.x += this.vx * dt;
+      this.z += this.vz * dt;
       this.y += this.vy * dt;
 
       if (this.y > 0) {
@@ -187,7 +193,9 @@
       }
 
       this.x = Math.max(42, Math.min(arenaWidth - 42, this.x));
+      this.z = Math.max(-arenaDepth / 2, Math.min(arenaDepth / 2, this.z));
       this.vx *= this.onGround ? Math.pow(0.0008, dt) : Math.pow(0.05, dt);
+      this.vz *= Math.pow(0.0008, dt);
       this.flash = Math.max(0, this.flash - dt);
 
       for (const ghost of this.afterImages) ghost.life -= dt;
@@ -216,8 +224,10 @@
       return {
         x: this.facing > 0 ? this.x + this.width / 2 - 4 : this.x - this.width / 2 - range + 4,
         y: this.y - this.height + 18,
+        z: this.z - this.depth / 2 - 18,
         width: range,
-        height: this.attack.height
+        height: this.attack.height,
+        depth: this.depth + 36
       };
     }
 
@@ -343,7 +353,8 @@
   }
 
   function rectsOverlap(a, b) {
-    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    const zOverlap = a.z === undefined || b.z === undefined || (a.z < b.z + b.depth && a.z + a.depth > b.z);
+    return zOverlap && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
   }
 
   window.StreetClashFighter = {
