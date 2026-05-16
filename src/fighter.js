@@ -107,6 +107,9 @@
       this.depth = 54;
       this.height = 112;
       this.facing = 1;
+      this.yaw = 0;
+      this.forwardX = 1;
+      this.forwardZ = 0;
       this.hp = 100;
       this.meter = 20;
       this.state = "idle";
@@ -221,13 +224,18 @@
       const activeEnd = activeStart + this.attack.active;
       if (this.attackTimer < activeStart || this.attackTimer > activeEnd) return null;
       const range = this.attack.range;
+      const fx = this.forwardX || this.facing;
+      const fz = this.forwardZ || 0;
+      const depth = this.depth + 36;
+      const centerX = this.x + fx * (this.width / 2 + range / 2);
+      const centerZ = this.z + fz * (this.depth / 2 + range / 2);
       return {
-        x: this.facing > 0 ? this.x + this.width / 2 - 4 : this.x - this.width / 2 - range + 4,
+        x: centerX - range / 2,
         y: this.y - this.height + 18,
-        z: this.z - this.depth / 2 - 18,
+        z: centerZ - depth / 2,
         width: range,
         height: this.attack.height,
-        depth: this.depth + 36
+        depth
       };
     }
 

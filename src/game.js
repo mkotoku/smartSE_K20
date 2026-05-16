@@ -421,10 +421,11 @@
       this.projectileGroup.add(mesh);
       this.projectiles.push({
         owner: fighter,
-        x: fighter.x + fighter.facing * 72,
+        x: fighter.x + fighter.forwardX * 72,
         y: fighter.y - 72,
-        z: fighter.z,
-        vx: fighter.facing * (type === "super" ? 620 : 480),
+        z: fighter.z + fighter.forwardZ * 72,
+        vx: fighter.forwardX * (type === "super" ? 620 : 480),
+        vz: fighter.forwardZ * (type === "super" ? 620 : 480),
         radius: type === "super" ? 34 : 22,
         damage: type === "super" ? 18 : 10,
         knockback: type === "super" ? 430 : 260,
@@ -438,6 +439,7 @@
     updateProjectiles(dt) {
       for (const projectile of this.projectiles) {
         projectile.x += projectile.vx * dt;
+        projectile.z += projectile.vz * dt;
         projectile.life -= dt;
       }
       this.projectiles = this.projectiles.filter((projectile) => {
@@ -459,7 +461,7 @@
           depth: projectile.radius * 2
         };
         if (!rectsOverlap(box, defender.bounds)) continue;
-        const blocked = defender.guard && defender.facing === -projectile.owner.facing && defender.onGround;
+        const blocked = defender.guard && this.isFacing(defender, projectile.owner) && defender.onGround;
         const attack = {
           name: projectile.super ? "super" : "special",
           label: projectile.super ? "Meteor Wave" : "Surge Wave",
@@ -478,6 +480,18 @@
     faceEachOther() {
       this.player.facing = this.player.x <= this.cpu.x ? 1 : -1;
       this.cpu.facing = this.cpu.x <= this.player.x ? 1 : -1;
+      this.turnToward(this.player, this.cpu);
+      this.turnToward(this.cpu, this.player);
+    }
+
+    turnToward(fighter, target) {
+      if (fighter.attack && fighter.attackTimer > fighter.attack.startup) return;
+      const dx = target.x - fighter.x;
+      const dz = target.z - fighter.z;
+      const length = Math.hypot(dx, dz) || 1;
+      fighter.forwardX = dx / length;
+      fighter.forwardZ = dz / length;
+      fighter.yaw = Math.atan2(fighter.forwardX, fighter.forwardZ);
     }
 
     separateFighters() {
@@ -499,16 +513,25 @@
       if (!attacker.attack || attacker.attackHasHit) return;
       const attackBox = attacker.attackBox();
       if (!attackBox || !rectsOverlap(attackBox, defender.bounds)) return;
-      const blocked = !attacker.attack.unblockable && defender.guard && defender.facing === -attacker.facing && defender.onGround;
-      const sparkX = attacker.facing > 0 ? attackBox.x + attackBox.width : attackBox.x;
+      if (!attacker.attack.unblockable && !this.isFacing(attacker, defender)) return;
+      const blocked = !attacker.attack.unblockable && defender.guard && this.isFacing(defender, attacker) && defender.onGround;
+      const sparkX = attacker.x + attacker.forwardX * (attacker.attack.range + 20);
       const sparkY = attackBox.y + attackBox.height * 0.45;
-      const sparkZ = attacker.z;
+      const sparkZ = attacker.z + attacker.forwardZ * (attacker.attack.range + 20);
       this.applyHit(attacker, defender, attacker.attack, blocked, sparkX, sparkY, sparkZ);
       attacker.attackHasHit = true;
     }
 
+    isFacing(source, target) {
+      const dx = target.x - source.x;
+      const dz = target.z - source.z;
+      const length = Math.hypot(dx, dz) || 1;
+      return (source.forwardX * dx + source.forwardZ * dz) / length > 0.28;
+    }
+
     applyHit(attacker, defender, attack, blocked, sparkX, sparkY, sparkZ) {
-      const damage = defender.takeHit(attack, attacker.facing, blocked);
+      const direction = Math.sign(attacker.forwardX || attacker.facing) || attacker.facing;
+      const damage = defender.takeHit(attack, direction, blocked);
       attacker.gainMeter(attack.meterGain || 0);
       this.hitStop = blocked ? 0.035 : attack.name === "super" ? 0.12 : 0.065;
       this.shake = Math.max(this.shake, blocked ? 3 : attack.name === "super" ? 15 : 8);
@@ -620,7 +643,7 @@
     syncRig(rig, fighter, time) {
       const pos = this.toWorld(fighter.x, fighter.y, fighter.z);
       rig.group.position.copy(pos);
-      rig.group.rotation.y = fighter.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
+      rig.group.rotation.y = fighter.yaw;
       rig.group.scale.setScalar(fighter.flash > 0 ? 1.08 : 1);
       const body = new THREE.Color(fighter.flash > 0 ? "#fff6b8" : fighter.color);
       const accent = new THREE.Color(fighter.accent);
@@ -689,14 +712,15 @@
       const color = colorMap[attack.name] || 0xffffff;
       const reach = attack.name === "throw" ? 0.42 : attack.range / 82;
       const size = attack.name === "light" ? 0.58 : attack.name === "heavy" ? 0.86 : attack.name === "super" ? 1.45 : 1.05;
-      const forward = fighter.facing * (0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22);
+      const forward = 0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22;
+      const lateral = attack.name === "heavy" ? Math.sin(progress * Math.PI * 2) * 0.08 : 0;
 
       rig.attack.scale.set(reach * size, attack.height / 92, (attack.depth || 80) / 72);
-      rig.attack.position.set(forward, 0.98, 0);
+      rig.attack.position.set(lateral, 0.98, forward);
       rig.attack.material.color.set(color);
       rig.attack.material.opacity = isActive ? 0.42 : 0.18;
 
-      rig.attackCore.position.set(forward + fighter.facing * 0.28, 1.08 + Math.sin(progress * Math.PI) * 0.16, 0);
+      rig.attackCore.position.set(lateral, 1.08 + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
       rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
       rig.attackCore.material.color.set(color);
       rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
