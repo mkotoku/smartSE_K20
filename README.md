@@ -7,6 +7,7 @@ Controls:
 - W: jump
 - Q/E: move in 3D depth
 - S: guard
+- Hold S: crouch; J/K become low attacks
 - J: light attack
 - K: heavy attack
 - L: special / super when meter is full
@@ -14,3 +15,5 @@ Controls:
 - Arrow Left/Right: rotate camera
 - Arrow Up/Down: raise/lower camera
 - Escape: pause
+
+Jumping avoids low attacks. Crouching avoids regular mid attacks.

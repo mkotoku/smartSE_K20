@@ -3,6 +3,7 @@
     light: {
       name: "light",
       label: "Jab",
+      level: "mid",
       damage: 6,
       meterGain: 8,
       startup: 0.05,
@@ -19,6 +20,7 @@
     heavy: {
       name: "heavy",
       label: "Breaker",
+      level: "mid",
       damage: 13,
       meterGain: 13,
       startup: 0.13,
@@ -35,6 +37,7 @@
     special: {
       name: "special",
       label: "Surge Kick",
+      level: "mid",
       damage: 19,
       meterGain: 4,
       meterCost: 35,
@@ -52,6 +55,7 @@
     super: {
       name: "super",
       label: "Meteor Rush",
+      level: "mid",
       damage: 32,
       meterGain: 0,
       meterCost: 100,
@@ -69,6 +73,7 @@
     throw: {
       name: "throw",
       label: "Throw",
+      level: "throw",
       damage: 10,
       meterGain: 10,
       startup: 0.08,
@@ -82,6 +87,40 @@
       sound: "throw",
       spark: "#caff70",
       unblockable: true
+    },
+    crouchLight: {
+      name: "crouchLight",
+      label: "Low Jab",
+      level: "low",
+      damage: 5,
+      meterGain: 7,
+      startup: 0.06,
+      active: 0.13,
+      recovery: 0.18,
+      range: 62,
+      height: 28,
+      knockback: 120,
+      hitStun: 0.2,
+      cancelWindow: 0.14,
+      sound: "hitLight",
+      spark: "#caff70"
+    },
+    crouchHeavy: {
+      name: "crouchHeavy",
+      label: "Sweep",
+      level: "low",
+      damage: 12,
+      meterGain: 12,
+      startup: 0.14,
+      active: 0.16,
+      recovery: 0.34,
+      range: 92,
+      height: 34,
+      knockback: 250,
+      hitStun: 0.35,
+      cancelWindow: 0,
+      sound: "hitHeavy",
+      spark: "#caff70"
     }
   };
 
@@ -118,6 +157,7 @@
       this.attackHasHit = false;
       this.hitStun = 0;
       this.guard = false;
+      this.crouching = false;
       this.onGround = true;
       this.flash = 0;
       this.afterImages = [];
@@ -224,6 +264,7 @@
       const activeEnd = activeStart + this.attack.active;
       if (this.attackTimer < activeStart || this.attackTimer > activeEnd) return null;
       const range = this.attack.range;
+      const isLow = this.attack.level === "low";
       const fx = this.forwardX || this.facing;
       const fz = this.forwardZ || 0;
       const depth = this.depth + 36;
@@ -231,7 +272,7 @@
       const centerZ = this.z + fz * (this.depth / 2 + range / 2);
       return {
         x: centerX - range / 2,
-        y: this.y - this.height + 18,
+        y: isLow ? this.y - 44 : this.y - this.height + 18,
         z: centerZ - depth / 2,
         width: range,
         height: this.attack.height,

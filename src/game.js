@@ -305,22 +305,26 @@
 
     handlePlayerInput() {
       const p = this.player;
-      p.guard = this.input.isDown("guard") && p.onGround && !p.attack;
+      p.crouching = this.input.isDown("guard") && p.onGround && !p.attack;
+      p.guard = p.crouching;
       if (!p.canAct()) return;
-      const speed = p.guard ? 92 : 306;
-      const depthSpeed = p.guard ? 76 : 240;
+      const speed = p.crouching ? 62 : 306;
+      const depthSpeed = p.crouching ? 50 : 240;
       if (!p.attack) {
         if (this.input.isDown("left")) p.vx = -speed;
         if (this.input.isDown("right")) p.vx = speed;
         if (this.input.isDown("forward")) p.vz = -depthSpeed;
         if (this.input.isDown("back")) p.vz = depthSpeed;
-        if (this.input.consume("jump") && p.onGround && !p.guard) {
+        if (this.input.consume("jump") && p.onGround && !p.crouching) {
           p.vy = -680;
           p.onGround = false;
         }
       }
-      if (p.guard && this.input.consume("heavy")) this.tryAttack(p, "throw");
-      if (!p.guard) {
+      if (p.crouching) {
+        if (this.input.consume("light")) this.tryAttack(p, "crouchLight");
+        if (this.input.consume("heavy")) this.tryAttack(p, "crouchHeavy");
+        if (this.input.consume("special")) this.tryAttack(p, "throw");
+      } else {
         if (this.input.consume("light")) this.tryAttack(p, "light");
         if (this.input.consume("heavy")) this.tryAttack(p, "heavy");
         if (this.input.consume("special")) this.tryAttack(p, p.meter >= 100 ? "super" : "special");
@@ -347,6 +351,7 @@
       const player = this.player;
       const profile = difficultyProfiles[this.settings.difficulty] || difficultyProfiles.normal;
       cpu.guard = false;
+      cpu.crouching = false;
       if (!cpu.canAct() || cpu.attack) return;
       this.cpuThinkTimer -= dt;
       const distanceX = Math.abs(player.x - cpu.x);
@@ -367,7 +372,7 @@
           this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? "special" : "approach";
           this.cpuMood = "closing";
         } else if (distance < 66) {
-          this.cpuPlan = Math.random() < 0.5 ? "throw" : "retreat";
+          this.cpuPlan = Math.random() < 0.45 ? "throw" : Math.random() < 0.5 ? "low" : "retreat";
           this.cpuMood = "scramble";
         } else if (Math.random() < profile.aggression) {
           this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : Math.random() < 0.56 ? "light" : "heavy";
@@ -387,10 +392,20 @@
         cpu.vx = -Math.sign(player.x - cpu.x) * profile.speed * 0.74;
         cpu.vz = (Math.random() < 0.5 ? -1 : 1) * profile.speed * 0.38;
       }
-      if (this.cpuPlan === "guard") cpu.guard = cpu.onGround;
+      if (this.cpuPlan === "guard") {
+        cpu.guard = cpu.onGround;
+        cpu.crouching = cpu.guard;
+      }
       if (this.cpuPlan === "punish") {
         if (distance < 125 && distanceZ < 52) this.tryAttack(cpu, "heavy");
         else cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
+      }
+      if (this.cpuPlan === "low") {
+        if (distance < 118 && distanceZ < 62) this.tryAttack(cpu, Math.random() < 0.6 ? "crouchLight" : "crouchHeavy");
+        else {
+          cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
+          if (distanceZ > 20) cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.75;
+        }
       }
       if (["light", "heavy", "special", "super", "throw"].includes(this.cpuPlan)) {
         const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "super" ? 158 : 126;
@@ -514,6 +529,11 @@
       const attackBox = attacker.attackBox();
       if (!attackBox || !rectsOverlap(attackBox, defender.bounds)) return;
       if (!attacker.attack.unblockable && !this.isFacing(attacker, defender)) return;
+      if (this.attackWhiffsByHeight(attacker.attack, defender)) {
+        attacker.attackHasHit = true;
+        this.showBanner("WHIFF", 0.24);
+        return;
+      }
       const blocked = !attacker.attack.unblockable && defender.guard && this.isFacing(defender, attacker) && defender.onGround;
       const sparkX = attacker.x + attacker.forwardX * (attacker.attack.range + 20);
       const sparkY = attackBox.y + attackBox.height * 0.45;
@@ -527,6 +547,12 @@
       const dz = target.z - source.z;
       const length = Math.hypot(dx, dz) || 1;
       return (source.forwardX * dx + source.forwardZ * dz) / length > 0.28;
+    }
+
+    attackWhiffsByHeight(attack, defender) {
+      if (attack.level === "low") return !defender.onGround;
+      if (attack.level === "mid") return defender.crouching && defender.onGround;
+      return false;
     }
 
     applyHit(attacker, defender, attack, blocked, sparkX, sparkY, sparkZ) {
@@ -651,8 +677,10 @@
       rig.head.material.color.copy(accent);
 
       const walk = fighter.state === "walk" ? Math.sin(time / 80) : 0;
-      const crouch = fighter.state === "guard" ? -0.12 : 0;
+      const isCrouch = fighter.crouching || fighter.state === "crouchLight" || fighter.state === "crouchHeavy";
+      const crouch = isCrouch ? -0.36 : fighter.state === "guard" ? -0.12 : 0;
       rig.body.position.set(0, 0.88 + crouch, 0);
+      rig.body.scale.y = isCrouch ? 0.72 : 1;
       rig.head.position.set(0, 1.46 + crouch + Math.sin(time / 260) * 0.02, 0);
       rig.armL.position.set(-0.34, 0.94 + crouch, 0);
       rig.armR.position.set(0.34, 0.94 + crouch, 0);
@@ -674,6 +702,16 @@
         rig.armR.rotation.z = fighter.state === "super" ? -0.16 : 0;
         rig.armL.position.set(-0.24, 1.0 + crouch, fighter.state === "super" ? 0.52 : 0.18);
         rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 : 0.45;
+      }
+      if (fighter.state === "crouchLight" || fighter.state === "crouchHeavy") {
+        const lowReach = fighter.state === "crouchHeavy" ? 0.9 : 0.58;
+        rig.armR.position.set(0.16, 0.72, lowReach);
+        rig.armR.rotation.x = Math.PI / 2;
+        rig.armR.rotation.y = fighter.state === "crouchHeavy" ? -0.22 : 0;
+        rig.legR.position.set(0.2, 0.2, 0.36);
+        rig.legR.rotation.x = Math.PI / 2;
+        rig.legL.position.set(-0.2, 0.22, -0.14);
+        rig.legL.rotation.z = -0.45;
       }
       if (fighter.state === "throw") {
         rig.armL.position.set(-0.38, 1.02 + crouch, 0.18);
@@ -717,20 +755,22 @@
         heavy: 0xff6b4a,
         special: 0x7df9ff,
         super: 0xffffff,
-        throw: 0xcaff70
+        throw: 0xcaff70,
+        crouchLight: 0xcaff70,
+        crouchHeavy: 0x86ff62
       };
       const color = colorMap[attack.name] || 0xffffff;
       const reach = attack.name === "throw" ? 0.42 : attack.range / 82;
-      const size = attack.name === "light" ? 0.58 : attack.name === "heavy" ? 0.86 : attack.name === "super" ? 1.45 : 1.05;
+      const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "super" ? 1.45 : 1.05;
       const forward = 0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22;
       const lateral = attack.name === "heavy" ? Math.sin(progress * Math.PI * 2) * 0.08 : 0;
 
       rig.attack.scale.set(reach * size, attack.height / 92, (attack.depth || 80) / 72);
-      rig.attack.position.set(lateral, 0.98, forward);
+      rig.attack.position.set(lateral, attack.level === "low" ? 0.42 : 0.98, forward);
       rig.attack.material.color.set(color);
       rig.attack.material.opacity = isActive ? 0.42 : 0.18;
 
-      rig.attackCore.position.set(lateral, 1.08 + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
+      rig.attackCore.position.set(lateral, (attack.level === "low" ? 0.48 : 1.08) + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
       rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
       rig.attackCore.material.color.set(color);
       rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
