@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Street Clash</title>
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <main id="app" class="app">
+    <canvas id="gameCanvas" width="960" height="540" aria-label="Street Clash game canvas"></canvas>
+
+    <section id="titleScreen" class="screen screen-title is-active">
+      <div class="brand">
+        <p class="kicker">ブラウザ格闘ゲーム</p>
+        <h1>Street Clash</h1>
+        <p class="subtitle">CPUを倒して連勝記録を伸ばそう</p>
+      </div>
+      <div class="menu-panel">
+        <button id="startButton" class="primary">Play</button>
+        <button id="settingsButton">Settings</button>
+        <div class="stats-grid" aria-label="保存済み戦績">
+          <span>Wins</span><strong id="statWins">0</strong>
+          <span>Losses</span><strong id="statLosses">0</strong>
+          <span>Best Streak</span><strong id="statBestStreak">0</strong>
+        </div>
+      </div>
+    </section>
+
+    <section id="hud" class="hud" aria-live="polite">
+      <div class="fighter-hud">
+        <span class="name">PLAYER</span>
+        <div class="life-bar"><span id="playerLife"></span></div>
+        <div class="meter-bar"><span id="playerMeter"></span></div>
+      </div>
+      <div class="center-hud">
+        <div class="round-score"><span id="playerRounds">0</span>-<span id="cpuRounds">0</span></div>
+        <div class="timer" id="timer">60</div>
+        <div class="combo-readout" id="comboReadout"></div>
+      </div>
+      <div class="fighter-hud cpu">
+        <span class="name">CPU</span>
+        <div class="life-bar"><span id="cpuLife"></span></div>
+        <div class="meter-bar"><span id="cpuMeter"></span></div>
+      </div>
+    </section>
+
+    <section id="pauseScreen" class="screen small-screen">
+      <h2>Paused</h2>
+      <button id="resumeButton" class="primary">Resume</button>
+      <button id="pauseTitleButton">Title</button>
+    </section>
+
+    <section id="resultScreen" class="screen small-screen">
+      <p id="resultLabel" class="result-label">Victory</p>
+      <h2 id="resultTitle">You Win</h2>
+      <p id="resultDetail">連勝: 1</p>
+      <button id="rematchButton" class="primary">Rematch</button>
+      <button id="resultTitleButton">Title</button>
+    </section>
+
+    <section id="settingsScreen" class="screen settings-screen">
+      <header>
+        <h2>Settings</h2>
+        <button id="closeSettingsButton" class="icon-button" aria-label="閉じる">×</button>
+      </header>
+      <label class="field">
+        <span>Difficulty</span>
+        <select id="difficultySelect">
+          <option value="easy">Easy</option>
+          <option value="normal">Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Fighter</span>
+        <select id="fighterSelect">
+          <option value="ryu">Blue Striker</option>
+          <option value="ken">Crimson Rush</option>
+          <option value="chun">Neon Cyclone</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Stage</span>
+        <select id="stageSelect">
+          <option value="metro">Metro Night</option>
+          <option value="dojo">Storm Dojo</option>
+          <option value="harbor">Sunset Harbor</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Volume</span>
+        <input id="volumeSlider" type="range" min="0" max="1" step="0.05">
+      </label>
+      <div class="key-grid" id="keyGrid" aria-label="キー設定"></div>
+      <button id="resetSettingsButton">Reset Settings</button>
+    </section>
+  </main>
+
+  <script src="src/storage.js" defer></script>
+  <script src="src/input.js" defer></script>
+  <script src="src/fighter.js" defer></script>
+  <script src="src/game.js" defer></script>
+  <script src="src/main.js" defer></script>
+</body>
+</html>
