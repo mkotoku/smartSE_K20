@@ -315,19 +315,34 @@
 
     createFighterRig() {
       const group = new THREE.Group();
-      const material = (color, emissive = 0x000000) => new THREE.MeshStandardMaterial({
+      const material = (color, emissive = 0x000000, roughness = 0.5) => new THREE.MeshStandardMaterial({
         color,
         emissive,
         emissiveIntensity: 0.18,
-        roughness: 0.42,
-        metalness: 0.08
+        roughness,
+        metalness: 0.06
       });
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.82, 0.32), material(0x2f80ed));
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), material(0xffd166));
-      const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.48, 8, 12), material(0x2f80ed));
-      const armR = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.48, 8, 12), material(0x2f80ed));
-      const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 8, 12), material(0x2f80ed));
-      const legR = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 8, 12), material(0x2f80ed));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.78, 0.34), material(0x2f80ed));
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), material(0xffc58a, 0x2b1508, 0.62));
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.66, 0.2), material(0x2f80ed));
+      const armR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.66, 0.2), material(0x2f80ed));
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.64, 0.22), material(0x24314f));
+      const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.64, 0.22), material(0x24314f));
+      const hair = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.16, 0.52), material(0x151117, 0x000000, 0.7));
+      const hairFront = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.08), material(0x151117, 0x000000, 0.7));
+      const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.075, 0.018), material(0x10131f));
+      const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.075, 0.018), material(0x10131f));
+      const browL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.02), material(0x151117));
+      const browR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.02), material(0x151117));
+      const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 0.018), material(0x5a1f2a));
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.08, 0.37), material(0x171923));
+      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.39), material(0xffd166, 0x332000));
+      const shoulderL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.26), material(0xffd166, 0x332000));
+      const shoulderR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.26), material(0xffd166, 0x332000));
+      const handL = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.16, 0.21), material(0xffc58a));
+      const handR = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.16, 0.21), material(0xffc58a));
+      const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.28), material(0x111722));
+      const bootR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.28), material(0x111722));
       const attack = new THREE.Mesh(
         new THREE.BoxGeometry(1, 1, 1),
         new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.34, depthWrite: false })
@@ -354,12 +369,24 @@
       attackRing.visible = false;
       attackLabel.visible = false;
       attackLabel.scale.set(1.8, 0.45, 1);
-      group.add(body, head, armL, armR, legL, legR, attack, attackCore, attackRing, attackLabel);
-      [body, head, armL, armR, legL, legR].forEach((part) => {
+      group.add(
+        body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
+        armL, armR, shoulderL, shoulderR, handL, handR,
+        legL, legR, bootL, bootR, belt, sash,
+        attack, attackCore, attackRing, attackLabel
+      );
+      [
+        body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
+        armL, armR, shoulderL, shoulderR, handL, handR, legL, legR, bootL, bootR, belt, sash
+      ].forEach((part) => {
         part.castShadow = true;
         part.receiveShadow = true;
       });
-      return { group, body, head, armL, armR, legL, legR, attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture };
+      return {
+        group, body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
+        armL, armR, shoulderL, shoulderR, handL, handR, legL, legR, bootL, bootR, belt, sash,
+        attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture
+      };
     }
 
     reset(settings) {
@@ -999,8 +1026,14 @@
       rig.group.scale.setScalar(fighter.flash > 0 ? 1.08 : 1);
       const body = new THREE.Color(fighter.flash > 0 ? "#fff6b8" : fighter.color);
       const accent = new THREE.Color(fighter.accent);
-      [rig.body, rig.armL, rig.armR, rig.legL, rig.legR].forEach((part) => part.material.color.copy(body));
-      rig.head.material.color.copy(accent);
+      const skin = new THREE.Color(fighter.flash > 0 ? "#fff6b8" : "#ffc58a");
+      const dark = new THREE.Color(fighter.dark || "#111722");
+      [rig.body, rig.armL, rig.armR].forEach((part) => part.material.color.copy(body));
+      [rig.shoulderL, rig.shoulderR, rig.sash].forEach((part) => part.material.color.copy(accent));
+      [rig.legL, rig.legR].forEach((part) => part.material.color.copy(dark).lerp(body, 0.28));
+      [rig.bootL, rig.bootR, rig.belt].forEach((part) => part.material.color.copy(dark));
+      [rig.head, rig.handL, rig.handR].forEach((part) => part.material.color.copy(skin));
+      [rig.hair, rig.hairFront, rig.browL, rig.browR].forEach((part) => part.material.color.copy(dark));
 
       const walk = fighter.state === "walk" ? Math.sin(time / 80) : 0;
       const isCrouch = fighter.crouching || fighter.state === "crouchLight" || fighter.state === "crouchHeavy";
@@ -1008,18 +1041,42 @@
       rig.body.position.set(0, 0.88 + crouch, 0);
       rig.body.scale.y = isCrouch ? 0.72 : 1;
       rig.head.position.set(0, 1.46 + crouch + Math.sin(time / 260) * 0.02, 0);
+      rig.head.rotation.set(0, 0, fighter.state === "hurt" ? -0.18 : 0);
+      rig.hair.position.set(0, rig.head.position.y + 0.19, 0);
+      rig.hairFront.position.set(0, rig.head.position.y + 0.1, 0.25);
+      rig.eyeL.position.set(-0.1, rig.head.position.y + 0.02, 0.252);
+      rig.eyeR.position.set(0.1, rig.head.position.y + 0.02, 0.252);
+      rig.browL.position.set(-0.1, rig.head.position.y + 0.09, 0.258);
+      rig.browR.position.set(0.1, rig.head.position.y + 0.09, 0.258);
+      rig.browL.rotation.z = fighter.state === "hurt" ? -0.35 : -0.18;
+      rig.browR.rotation.z = fighter.state === "hurt" ? 0.35 : 0.18;
+      rig.mouth.position.set(0, rig.head.position.y - 0.12, 0.258);
+      rig.belt.position.set(0, 0.56 + crouch * 0.35, 0);
+      rig.sash.position.set(0.12, 0.56 + crouch * 0.35, 0.01);
       rig.armL.position.set(-0.34, 0.94 + crouch, 0);
       rig.armR.position.set(0.34, 0.94 + crouch, 0);
+      rig.shoulderL.position.set(-0.36, 1.2 + crouch, 0);
+      rig.shoulderR.position.set(0.36, 1.2 + crouch, 0);
+      rig.handL.position.set(-0.34, 0.54 + crouch, 0.02);
+      rig.handR.position.set(0.34, 0.54 + crouch, 0.02);
       rig.legL.position.set(-0.16, 0.32, 0.05);
       rig.legR.position.set(0.16, 0.32, -0.05);
+      rig.bootL.position.set(-0.16, 0.02, 0.08);
+      rig.bootR.position.set(0.16, 0.02, -0.02);
       rig.armL.rotation.z = 0.45;
       rig.armR.rotation.z = -0.45;
       rig.armL.rotation.x = 0;
       rig.armL.rotation.y = 0;
       rig.armR.rotation.x = 0;
       rig.armR.rotation.y = 0;
+      rig.shoulderL.rotation.copy(rig.armL.rotation);
+      rig.shoulderR.rotation.copy(rig.armR.rotation);
+      rig.handL.rotation.copy(rig.armL.rotation);
+      rig.handR.rotation.copy(rig.armR.rotation);
       rig.legL.rotation.z = walk * 0.35;
       rig.legR.rotation.z = -walk * 0.35;
+      rig.bootL.rotation.copy(rig.legL.rotation);
+      rig.bootR.rotation.copy(rig.legR.rotation);
       if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "super") {
         const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
         const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 1;
@@ -1031,6 +1088,14 @@
         rig.armR.rotation.z = fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
         rig.armL.position.set(-0.24, 1.0 + crouch + charge * 0.18, fighter.state === "super" ? 0.62 : 0.24);
         rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 - charge * 0.36 : 0.45 + charge * 0.42;
+        rig.handR.position.set(0.18, 0.74 + crouch + charge * 0.08, reachPose + 0.4 + charge * 0.16);
+        rig.handR.rotation.copy(rig.armR.rotation);
+        rig.handL.position.set(-0.24, 0.62 + crouch + charge * 0.18, fighter.state === "super" ? 0.94 : 0.48);
+        rig.handL.rotation.copy(rig.armL.rotation);
+        rig.shoulderL.position.set(-0.26, 1.18 + crouch + charge * 0.08, 0.1);
+        rig.shoulderR.position.set(0.22, 1.22 + crouch + charge * 0.04, 0.18);
+        rig.shoulderL.rotation.copy(rig.armL.rotation);
+        rig.shoulderR.rotation.copy(rig.armR.rotation);
         if (fighter.state === "special" || fighter.state === "super") {
           rig.body.rotation.x = -0.14 - charge * (fighter.state === "super" ? 0.22 : 0.12);
           rig.head.position.y += charge * 0.1;
@@ -1042,10 +1107,15 @@
         rig.armR.position.set(0.16, 0.72, lowReach);
         rig.armR.rotation.x = Math.PI / 2;
         rig.armR.rotation.y = fighter.state === "crouchHeavy" ? -0.22 : 0;
+        rig.handR.position.set(0.16, 0.56, lowReach + 0.42);
+        rig.handR.rotation.copy(rig.armR.rotation);
         rig.legR.position.set(0.2, 0.2, 0.36);
         rig.legR.rotation.x = Math.PI / 2;
         rig.legL.position.set(-0.2, 0.22, -0.14);
         rig.legL.rotation.z = -0.45;
+        rig.bootR.position.set(0.2, 0.2, 0.74);
+        rig.bootR.rotation.copy(rig.legR.rotation);
+        rig.bootL.position.set(-0.2, 0.02, -0.2);
       }
       if (fighter.state === "throw") {
         rig.armL.position.set(-0.38, 1.02 + crouch, 0.18);
@@ -1055,6 +1125,10 @@
         rig.armR.rotation.x = 0;
         rig.armR.rotation.y = 0;
         rig.body.rotation.x = -0.18;
+        rig.handL.position.set(-0.52, 0.72 + crouch, 0.34);
+        rig.handR.position.set(0.56, 0.72 + crouch, 0.34);
+        rig.handL.rotation.copy(rig.armL.rotation);
+        rig.handR.rotation.copy(rig.armR.rotation);
       } else if (fighter.state !== "special" && fighter.state !== "super") {
         rig.body.rotation.x = 0;
       }
@@ -1063,6 +1137,8 @@
         rig.armR.position.set(0.12, 1.16 + crouch, 0.2);
         rig.armL.rotation.z = 1.1;
         rig.armR.rotation.z = -1.1;
+        rig.handL.position.set(-0.1, 0.98 + crouch, 0.38);
+        rig.handR.position.set(0.1, 0.98 + crouch, 0.38);
       }
       if (fighter.state === "down") rig.group.rotation.z = fighter.facing * 1.1;
       else rig.group.rotation.z = 0;
