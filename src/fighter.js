@@ -206,7 +206,7 @@
       return true;
     }
 
-    update(dt, arenaWidth, arenaDepth = 260) {
+    update(dt, arenaWidth, arenaDepth = 260, hasFloor = true) {
       this.comboTimer = Math.max(0, this.comboTimer - dt);
       if (this.comboTimer <= 0 && !this.attack) this.comboChain = [];
 
@@ -227,7 +227,7 @@
       this.z += this.vz * dt;
       this.y += this.vy * dt;
 
-      if (this.y > 0) {
+      if (hasFloor && this.y > 0) {
         this.y = 0;
         this.vy = 0;
         this.onGround = true;

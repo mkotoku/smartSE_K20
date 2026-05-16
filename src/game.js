@@ -4,6 +4,15 @@
 
   const ARENA_WIDTH = 960;
   const ARENA_DEPTH = 300;
+  const STAGE_LEFT = 80;
+  const STAGE_RIGHT = ARENA_WIDTH - 80;
+  const STAGE_FRONT = -130;
+  const STAGE_BACK = 130;
+  const BLAST_LEFT = -80;
+  const BLAST_RIGHT = ARENA_WIDTH + 80;
+  const BLAST_FRONT = -280;
+  const BLAST_BACK = 280;
+  const BLAST_FALL_Y = 420;
 
   const difficultyProfiles = {
     easy: { reaction: 0.54, aggression: 0.4, defense: 0.28, speed: 220, punish: 0.2 },
@@ -98,6 +107,7 @@
       this.slowMotion = 0;
       this.banner = "";
       this.bannerTimer = 0;
+      this.ringoutWinner = null;
       this.cameraModes = ["auto", "side", "top", "orbit"];
       this.cameraModeIndex = 0;
       this.cameraMode = "auto";
@@ -147,16 +157,36 @@
       this.stageGroup.clear();
 
       const floor = new THREE.Mesh(
-        new THREE.BoxGeometry(12.8, 0.18, 5.2),
+        new THREE.BoxGeometry((STAGE_RIGHT - STAGE_LEFT) / 75, 0.18, (STAGE_BACK - STAGE_FRONT) / 75),
         new THREE.MeshStandardMaterial({ color: theme.floor, roughness: 0.55, metalness: 0.12 })
       );
       floor.receiveShadow = true;
       floor.position.y = -0.09;
       this.stageGroup.add(floor);
 
-      const grid = new THREE.GridHelper(12.8, 16, theme.neon, 0x4c5265);
+      const grid = new THREE.GridHelper((STAGE_RIGHT - STAGE_LEFT) / 75, 14, theme.neon, 0x4c5265);
       grid.position.y = 0.012;
       this.stageGroup.add(grid);
+
+      const edgeMaterial = new THREE.MeshBasicMaterial({ color: theme.neon });
+      const stageWidth = (STAGE_RIGHT - STAGE_LEFT) / 75;
+      const stageDepth = (STAGE_BACK - STAGE_FRONT) / 75;
+      const frontEdge = new THREE.Mesh(new THREE.BoxGeometry(stageWidth, 0.045, 0.045), edgeMaterial);
+      const backEdge = frontEdge.clone();
+      const leftEdge = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, stageDepth), edgeMaterial);
+      const rightEdge = leftEdge.clone();
+      frontEdge.position.set(0, 0.065, STAGE_FRONT / 75);
+      backEdge.position.set(0, 0.065, STAGE_BACK / 75);
+      leftEdge.position.set((STAGE_LEFT - ARENA_WIDTH / 2) / 75, 0.065, 0);
+      rightEdge.position.set((STAGE_RIGHT - ARENA_WIDTH / 2) / 75, 0.065, 0);
+      this.stageGroup.add(frontEdge, backEdge, leftEdge, rightEdge);
+
+      const voidPlane = new THREE.Mesh(
+        new THREE.BoxGeometry(15, 0.05, 7),
+        new THREE.MeshBasicMaterial({ color: 0x05070d, transparent: true, opacity: 0.58 })
+      );
+      voidPlane.position.y = -0.24;
+      this.stageGroup.add(voidPlane);
 
       for (let i = 0; i < 10; i++) {
         const height = 1.6 + (i % 4) * 0.42;
@@ -252,6 +282,7 @@
       this.player.z = 0;
       this.roundTime = 60;
       this.finished = false;
+      this.ringoutWinner = null;
       this.cpuThinkTimer = 0;
       this.cpuPlan = "idle";
       this.cpuMood = "measuring";
@@ -293,14 +324,89 @@
       this.handlePlayerInput();
       this.handleCpu(dt);
       this.updateProjectiles(dt);
-      this.player.update(dt, ARENA_WIDTH, ARENA_DEPTH);
-      this.cpu.update(dt, ARENA_WIDTH, ARENA_DEPTH);
+      this.player.update(dt, ARENA_WIDTH + 160, ARENA_DEPTH + 260, this.isOnStage(this.player));
+      this.cpu.update(dt, ARENA_WIDTH + 160, ARENA_DEPTH + 260, this.isOnStage(this.cpu));
+      this.handleLedgeRecovery(this.player, this.cpu, true);
+      this.handleLedgeRecovery(this.cpu, this.player, false);
       this.separateFighters();
       this.resolveAttack(this.player, this.cpu);
       this.resolveAttack(this.cpu, this.player);
       this.resolveProjectiles();
       this.updateEffects(dt);
       this.checkRoundEnd();
+    }
+
+    isOnStage(fighter) {
+      return fighter.x >= STAGE_LEFT && fighter.x <= STAGE_RIGHT && fighter.z >= STAGE_FRONT && fighter.z <= STAGE_BACK;
+    }
+
+    isPastBlastZone(fighter) {
+      return fighter.x < BLAST_LEFT || fighter.x > BLAST_RIGHT || fighter.z < BLAST_FRONT || fighter.z > BLAST_BACK || fighter.y > BLAST_FALL_Y;
+    }
+
+    nearestStagePoint(fighter) {
+      return {
+        x: Math.max(STAGE_LEFT, Math.min(STAGE_RIGHT, fighter.x)),
+        z: Math.max(STAGE_FRONT, Math.min(STAGE_BACK, fighter.z))
+      };
+    }
+
+    wantsRecovery(fighter, opponent, isPlayer) {
+      if (fighter.onGround || this.isOnStage(fighter)) return false;
+      const ledge = this.nearestStagePoint(fighter);
+      const dx = ledge.x - fighter.x;
+      const dz = ledge.z - fighter.z;
+      const nearLedge = Math.hypot(dx, dz) < 84 && fighter.y > -85 && fighter.y < 90;
+      if (!nearLedge) return false;
+      if (!isPlayer) return true;
+      const towardX = dx < 0 ? this.input.isDown("left") : this.input.isDown("right");
+      const towardZ = dz < 0 ? this.input.isDown("forward") : this.input.isDown("back");
+      return towardX || towardZ || this.input.isDown("jump");
+    }
+
+    handleLedgeRecovery(fighter, opponent, isPlayer) {
+      if (this.isPastBlastZone(fighter)) {
+        this.ringoutWinner = fighter === this.player ? "cpu" : "player";
+        this.showBanner("RING OUT", 0.9);
+        return;
+      }
+      if (!this.wantsRecovery(fighter, opponent, isPlayer)) return;
+      const ledge = this.nearestStagePoint(fighter);
+      const centerX = ARENA_WIDTH / 2;
+      const centerZ = 0;
+      fighter.x = ledge.x;
+      fighter.z = ledge.z;
+      fighter.y = 0;
+      fighter.vy = -520;
+      fighter.vx = Math.sign(centerX - fighter.x) * 180;
+      fighter.vz = Math.sign(centerZ - fighter.z) * 150;
+      fighter.onGround = false;
+      fighter.crouching = false;
+      fighter.guard = false;
+      fighter.state = "jump";
+      this.spawnLedgeBurst(fighter);
+      this.showBanner("LEDGE RECOVERY", 0.55);
+    }
+
+    spawnLedgeBurst(fighter) {
+      const point = this.nearestStagePoint(fighter);
+      for (let i = 0; i < 14; i++) {
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.045, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 1 })
+        );
+        this.effectGroup.add(mesh);
+        this.effects.push({
+          x: point.x,
+          y: -14,
+          z: point.z,
+          vx: (Math.random() - 0.5) * 3,
+          vy: 1.2 + Math.random() * 2,
+          vz: (Math.random() - 0.5) * 3,
+          life: 0.25 + Math.random() * 0.2,
+          mesh
+        });
+      }
     }
 
     handlePlayerInput() {
@@ -621,7 +727,8 @@
     checkRoundEnd() {
       if (this.finished) return;
       let winner = null;
-      if (this.player.hp <= 0 && this.cpu.hp <= 0) winner = "draw";
+      if (this.ringoutWinner) winner = this.ringoutWinner;
+      else if (this.player.hp <= 0 && this.cpu.hp <= 0) winner = "draw";
       else if (this.cpu.hp <= 0) winner = "player";
       else if (this.player.hp <= 0) winner = "cpu";
       else if (this.roundTime <= 0) {

@@ -17,3 +17,5 @@ Controls:
 - Escape: pause
 
 Jumping avoids low attacks. Crouching avoids regular mid attacks.
+
+Leaving the glowing stage platform makes the fighter fall. Move or jump back toward an edge to trigger ledge recovery before dropping below the blast zone.
