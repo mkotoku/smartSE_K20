@@ -27,9 +27,9 @@
   };
 
   const stageThemes = {
-    metro: { floor: "#2e3447", back: "#11162d", fog: "#1d2441", neon: "#56d6a6" },
-    dojo: { floor: "#4a3427", back: "#2c303d", fog: "#34291f", neon: "#ffd166" },
-    harbor: { floor: "#263247", back: "#47235d", fog: "#172030", neon: "#7df9ff" }
+    metro: { floor: "#2e3447", back: "#11162d", fog: "#1d2441", neon: "#56d6a6", accent: "#ffd166", sky: "#6b7cff" },
+    dojo: { floor: "#4a3427", back: "#2c303d", fog: "#34291f", neon: "#ffd166", accent: "#ff6b4a", sky: "#7df9ff" },
+    harbor: { floor: "#263247", back: "#47235d", fog: "#172030", neon: "#7df9ff", accent: "#ff8a66", sky: "#ffd166" }
   };
 
   class SoundEngine {
@@ -137,6 +137,9 @@
       this.rimLight = new THREE.PointLight(0x56d6a6, 2.2, 12);
       this.rimLight.position.set(0, 3, -3.5);
       this.scene.add(this.rimLight);
+      this.stagePulseLight = new THREE.PointLight(0xffffff, 1.4, 10);
+      this.stagePulseLight.position.set(0, 1.4, 1.4);
+      this.scene.add(this.stagePulseLight);
 
       this.stageGroup = new THREE.Group();
       this.scene.add(this.stageGroup);
@@ -154,11 +157,20 @@
       this.scene.background = new THREE.Color(theme.back);
       this.scene.fog = new THREE.Fog(theme.fog, 8, 18);
       this.rimLight.color.set(theme.neon);
+      this.stagePulseLight.color.set(theme.accent);
+      this.disposeStageObjects();
       this.stageGroup.clear();
 
+      const floorMaterial = new THREE.MeshStandardMaterial({
+        color: theme.floor,
+        roughness: 0.34,
+        metalness: 0.3,
+        emissive: theme.neon,
+        emissiveIntensity: 0.05
+      });
       const floor = new THREE.Mesh(
         new THREE.BoxGeometry((STAGE_RIGHT - STAGE_LEFT) / 75, 0.18, (STAGE_BACK - STAGE_FRONT) / 75),
-        new THREE.MeshStandardMaterial({ color: theme.floor, roughness: 0.55, metalness: 0.12 })
+        floorMaterial
       );
       floor.receiveShadow = true;
       floor.position.y = -0.09;
@@ -180,6 +192,7 @@
       leftEdge.position.set((STAGE_LEFT - ARENA_WIDTH / 2) / 75, 0.065, 0);
       rightEdge.position.set((STAGE_RIGHT - ARENA_WIDTH / 2) / 75, 0.065, 0);
       this.stageGroup.add(frontEdge, backEdge, leftEdge, rightEdge);
+      this.addStageUnderGlow(theme, stageWidth, stageDepth);
 
       const voidPlane = new THREE.Mesh(
         new THREE.BoxGeometry(15, 0.05, 7),
@@ -188,24 +201,115 @@
       voidPlane.position.y = -0.24;
       this.stageGroup.add(voidPlane);
 
-      for (let i = 0; i < 10; i++) {
-        const height = 1.6 + (i % 4) * 0.42;
-        const block = new THREE.Mesh(
-          new THREE.BoxGeometry(0.48, height, 0.34),
-          new THREE.MeshStandardMaterial({ color: i % 2 ? 0x242a3f : 0x303854, roughness: 0.7 })
+      this.addBackdropArchitecture(theme);
+      this.addStageParticles(theme);
+      this.addStageSetPieces(theme);
+    }
+
+    disposeStageObjects() {
+      this.stageGroup.traverse((object) => {
+        if (object.geometry) object.geometry.dispose();
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        materials.filter(Boolean).forEach((material) => {
+          Object.values(material).forEach((value) => {
+            if (value && typeof value.dispose === "function" && value.isTexture) value.dispose();
+          });
+          material.dispose();
+        });
+      });
+    }
+
+    addStageUnderGlow(theme, stageWidth, stageDepth) {
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: theme.neon,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false
+      });
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(stageWidth * 1.08, stageDepth * 1.18), glowMaterial);
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.y = -0.18;
+      this.stageGroup.add(glow);
+
+      for (let i = 0; i < 5; i++) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.85 + i * 0.38, 0.01, 6, 80),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? theme.accent : theme.neon, transparent: true, opacity: 0.28 })
         );
-        block.position.set(-6 + i * 1.3, height / 2 - 0.02, -2.95);
-        this.stageGroup.add(block);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.026 + i * 0.002;
+        ring.userData.spin = 0.08 + i * 0.025;
+        this.stageGroup.add(ring);
+      }
+    }
+
+    addBackdropArchitecture(theme) {
+      const buildingMaterial = new THREE.MeshStandardMaterial({ color: 0x20263a, roughness: 0.72, metalness: 0.18 });
+      const glassMaterial = new THREE.MeshBasicMaterial({ color: theme.sky, transparent: true, opacity: 0.42 });
+      for (let side = -1; side <= 1; side += 2) {
+        for (let i = 0; i < 9; i++) {
+          const height = 1.4 + ((i * 37) % 6) * 0.35;
+          const width = 0.42 + (i % 3) * 0.12;
+          const tower = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.34), buildingMaterial);
+          tower.position.set(-5.3 + i * 1.3, height / 2 - 0.08, side * 3.05);
+          this.stageGroup.add(tower);
+          for (let w = 0; w < 3; w++) {
+            const windowStrip = new THREE.Mesh(new THREE.BoxGeometry(width * 0.68, 0.035, 0.025), glassMaterial);
+            windowStrip.position.set(tower.position.x, 0.45 + w * 0.42, side * 2.86);
+            this.stageGroup.add(windowStrip);
+          }
+        }
+      }
+    }
+
+    addStageSetPieces(theme) {
+      const pillarMaterial = new THREE.MeshStandardMaterial({
+        color: theme.floor,
+        emissive: theme.neon,
+        emissiveIntensity: 0.12,
+        roughness: 0.28,
+        metalness: 0.45
+      });
+      const positions = [
+        [-5.0, -2.0], [5.0, -2.0], [-5.0, 2.0], [5.0, 2.0]
+      ];
+      for (const [x, z] of positions) {
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 1.55, 18), pillarMaterial);
+        pillar.position.set(x, 0.76, z);
+        this.stageGroup.add(pillar);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.18, 18, 12), new THREE.MeshBasicMaterial({ color: theme.accent }));
+        cap.position.set(x, 1.58, z);
+        this.stageGroup.add(cap);
       }
 
-      for (let i = 0; i < 7; i++) {
-        const sign = new THREE.Mesh(
-          new THREE.BoxGeometry(0.72, 0.08, 0.08),
-          new THREE.MeshBasicMaterial({ color: theme.neon })
+      for (let i = 0; i < 6; i++) {
+        const banner = new THREE.Mesh(
+          new THREE.BoxGeometry(0.62, 0.16, 0.035),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? theme.neon : theme.accent })
         );
-        sign.position.set(-4.7 + i * 1.55, 2.0 + Math.sin(i) * 0.3, -2.72);
-        this.stageGroup.add(sign);
+        banner.position.set(-3.9 + i * 1.55, 2.45 + Math.sin(i) * 0.16, -2.48);
+        banner.userData.float = i * 0.7;
+        this.stageGroup.add(banner);
       }
+    }
+
+    addStageParticles(theme) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      for (let i = 0; i < 90; i++) {
+        positions.push(
+          (Math.random() - 0.5) * 11,
+          0.3 + Math.random() * 3.2,
+          -3.2 + Math.random() * 6.4
+        );
+      }
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      const particles = new THREE.Points(
+        geometry,
+        new THREE.PointsMaterial({ color: theme.neon, size: 0.035, transparent: true, opacity: 0.52 })
+      );
+      particles.userData.particles = true;
+      this.stageGroup.add(particles);
     }
 
     createFighterRig() {
@@ -764,6 +868,7 @@
 
     draw() {
       const time = performance.now();
+      this.animateStage(time);
       this.syncRig(this.playerRig, this.player, time);
       this.syncRig(this.cpuRig, this.cpu, time);
       this.syncProjectiles();
@@ -771,6 +876,22 @@
       this.syncCamera();
       this.drawMessage3D();
       this.renderer.render(this.scene, this.camera);
+    }
+
+    animateStage(time) {
+      const seconds = time / 1000;
+      this.stagePulseLight.intensity = 1.1 + Math.sin(seconds * 2.4) * 0.45;
+      for (const child of this.stageGroup.children) {
+        if (child.userData.spin) child.rotation.z += child.userData.spin * 0.016;
+        if (child.userData.float !== undefined) {
+          child.position.y += Math.sin(seconds * 1.7 + child.userData.float) * 0.0009;
+          child.rotation.y = Math.sin(seconds + child.userData.float) * 0.1;
+        }
+        if (child.userData.particles) {
+          child.rotation.y = seconds * 0.03;
+          child.material.opacity = 0.42 + Math.sin(seconds * 1.8) * 0.12;
+        }
+      }
     }
 
     syncRig(rig, fighter, time) {
