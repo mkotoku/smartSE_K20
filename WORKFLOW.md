@@ -73,3 +73,55 @@ When no open issues remain:
 - Report that all tickets are complete.
 - Include the latest commit URL.
 - Include any known limitations, such as unavailable browser automation.
+
+## 7. Local Tooling Notes
+
+This Windows/Codex workspace has a few local tool paths that may not be visible in a fresh shell until the app or terminal is restarted.
+
+- GitHub CLI is installed at `C:\Program Files\GitHub CLI\gh.exe`.
+- Git is installed at `C:\Program Files\Git\cmd\git.exe`.
+- Both `C:\Program Files\GitHub CLI` and `C:\Program Files\Git\cmd` are added to the user `Path`.
+- If `gh` or `git` is still not found in the current process, call the full executable path above or refresh the shell environment before continuing.
+- PowerShell may block `npm.ps1`; use `npm.cmd` and `npx.cmd` instead of bare `npm` or `npx`.
+- Playwright is available through the global Playwright CLI package under `C:\Users\waseda\AppData\Roaming\npm\node_modules\@playwright\cli\node_modules`.
+- The user `NODE_PATH` is set to that Playwright `node_modules` directory so Node smoke tests can use `require("playwright")`.
+- Playwright-managed Chromium is installed in `%LOCALAPPDATA%\ms-playwright` and should launch with `chromium.launch({ headless: true })`.
+- If the managed browser cache is missing after an update, run:
+
+```powershell
+node "C:\Users\waseda\AppData\Roaming\npm\node_modules\@playwright\cli\node_modules\playwright\cli.js" install chromium
+```
+
+- Existing desktop browsers are also usable with Playwright fallbacks:
+
+```js
+await chromium.launch({ channel: "chrome", headless: true });
+await chromium.launch({ channel: "msedge", headless: true });
+```
+
+Recommended local smoke test pattern:
+
+```powershell
+$env:NODE_PATH = "C:\Users\waseda\AppData\Roaming\npm\node_modules\@playwright\cli\node_modules"
+@'
+const { chromium } = require("playwright");
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  await page.goto("file:///C:/Users/waseda/Desktop/work/K20/ex10/index.html", { waitUntil: "load" });
+  await page.getByRole("button", { name: "Play" }).click();
+  await page.waitForTimeout(1000);
+  const state = await page.evaluate(() => ({
+    title: document.title,
+    hudActive: document.getElementById("hud").classList.contains("is-active"),
+    camera: document.getElementById("cameraReadout").textContent,
+    timer: document.getElementById("timer").textContent
+  }));
+  await browser.close();
+  console.log(JSON.stringify({ state, errors }, null, 2));
+})().catch(error => { console.error(error); process.exit(1); });
+'@ | node -
+```
