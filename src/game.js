@@ -108,6 +108,7 @@
       this.banner = "";
       this.bannerTimer = 0;
       this.ringoutWinner = null;
+      this.specialCinematic = null;
       this.cameraModes = ["auto", "side", "top", "orbit"];
       this.cameraModeIndex = 0;
       this.cameraMode = "auto";
@@ -393,6 +394,7 @@
       this.hitStop = 0;
       this.shake = 0;
       this.slowMotion = 0;
+      this.specialCinematic = null;
       this.effects = [];
       this.projectiles = [];
       this.clearThreeGroup(this.projectileGroup);
@@ -412,6 +414,7 @@
         this.slowMotion = Math.max(0, this.slowMotion - dt);
         dt *= 0.42;
       }
+      this.updateSpecialCinematic(dt);
       if (this.hitStop > 0) {
         this.hitStop = Math.max(0, this.hitStop - dt);
         this.updateEffects(dt);
@@ -632,10 +635,93 @@
       this.sound.play(type === "super" ? "super" : "menu");
       if (fighter === this.player) this.showBanner(fighter.attack.label.toUpperCase(), 0.32);
       if (type === "special" || type === "super") {
+        this.startSpecialCinematic(fighter, type);
+        this.spawnSpecialFlare(fighter, type);
         this.spawnWave(fighter, type);
-        this.shake = Math.max(this.shake, type === "super" ? 8 : 4);
+        this.slowMotion = Math.max(this.slowMotion, type === "super" ? 0.42 : 0.22);
+        this.shake = Math.max(this.shake, type === "super" ? 13 : 7);
       }
       return true;
+    }
+
+    startSpecialCinematic(fighter, type) {
+      const length = type === "super" ? 0.52 : 0.34;
+      this.specialCinematic = { fighter, type, timer: length, duration: length };
+      this.stagePulseLight.intensity = type === "super" ? 3.6 : 2.5;
+      this.stagePulseLight.color.set(type === "super" ? 0xffffff : 0x7df9ff);
+      if (fighter === this.player) this.showBanner(type === "super" ? "METEOR RUSH" : "SURGE DRIVE", 0.48);
+    }
+
+    spawnSpecialFlare(fighter, type) {
+      const color = type === "super" ? 0xfff4a8 : 0x7df9ff;
+      const center = this.toWorld(fighter.x, fighter.y - 76, fighter.z);
+      const ringCount = type === "super" ? 4 : 3;
+      for (let i = 0; i < ringCount; i++) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.45 + i * 0.16, 0.018, 8, 80),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false })
+        );
+        ring.position.copy(center);
+        ring.rotation.set(Math.PI / 2, 0, fighter.yaw + i * 0.7);
+        this.effectGroup.add(ring);
+        this.effects.push({
+          x: fighter.x,
+          y: fighter.y - 76,
+          z: fighter.z,
+          vx: fighter.forwardX * 0.08,
+          vy: -0.2,
+          vz: fighter.forwardZ * 0.08,
+          life: 0.42 + i * 0.04,
+          maxLife: 0.42 + i * 0.04,
+          spin: type === "super" ? 6.2 : 4.4,
+          grow: 1.8 + i * 0.25,
+          mesh: ring
+        });
+      }
+      const pillar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.38, 0.58, type === "super" ? 2.7 : 2.1, 32, 1, true),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: type === "super" ? 0.34 : 0.24, depthWrite: false, side: THREE.DoubleSide })
+      );
+      pillar.position.copy(center);
+      pillar.position.y += type === "super" ? 0.78 : 0.56;
+      this.effectGroup.add(pillar);
+      this.effects.push({
+        x: fighter.x,
+        y: fighter.y - 128,
+        z: fighter.z,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        life: type === "super" ? 0.5 : 0.34,
+        maxLife: type === "super" ? 0.5 : 0.34,
+        spin: type === "super" ? -3.2 : -2.1,
+        grow: 0.65,
+        mesh: pillar
+      });
+      const slashCount = type === "super" ? 18 : 10;
+      for (let i = 0; i < slashCount; i++) {
+        const slash = new THREE.Mesh(
+          new THREE.BoxGeometry(0.035, 0.018, type === "super" ? 0.95 : 0.68),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : color, transparent: true, opacity: 0.92, depthWrite: false })
+        );
+        slash.position.copy(center);
+        slash.rotation.y = fighter.yaw + (Math.random() - 0.5) * 1.15;
+        slash.rotation.z = (Math.random() - 0.5) * 1.6;
+        this.effectGroup.add(slash);
+        this.effects.push({
+          x: fighter.x + (Math.random() - 0.5) * 20,
+          y: fighter.y - 78 + (Math.random() - 0.5) * 42,
+          z: fighter.z + (Math.random() - 0.5) * 20,
+          vx: fighter.forwardX * (1.8 + Math.random() * 2.4),
+          vy: (Math.random() - 0.2) * 2.2,
+          vz: fighter.forwardZ * (1.8 + Math.random() * 2.4),
+          life: 0.18 + Math.random() * 0.2,
+          maxLife: 0.34,
+          spin: (Math.random() - 0.5) * 10,
+          grow: 1.2,
+          mesh: slash
+        });
+      }
     }
 
     spawnWave(fighter, type) {
@@ -669,7 +755,7 @@
       }
       this.projectiles = this.projectiles.filter((projectile) => {
         const keep = projectile.life > 0 && projectile.x > -80 && projectile.x < ARENA_WIDTH + 80 && !projectile.hit;
-        if (!keep && projectile.mesh.parent) projectile.mesh.parent.remove(projectile.mesh);
+        if (!keep) this.removeSceneObject(projectile.mesh);
         return keep;
       });
     }
@@ -815,12 +901,23 @@
         effect.z += effect.vz * 70 * dt;
         effect.vy -= 4.2 * dt;
         effect.life -= dt;
+        if (effect.spin) effect.mesh.rotation.y += effect.spin * dt;
       }
       this.effects = this.effects.filter((effect) => {
         const keep = effect.life > 0;
-        if (!keep && effect.mesh.parent) effect.mesh.parent.remove(effect.mesh);
+        if (!keep) this.removeSceneObject(effect.mesh);
         return keep;
       });
+    }
+
+    updateSpecialCinematic(dt) {
+      if (!this.specialCinematic) return;
+      this.specialCinematic.timer -= dt;
+      if (this.specialCinematic.timer <= 0) {
+        const theme = stageThemes[this.settings.stage] || stageThemes.metro;
+        this.stagePulseLight.color.set(theme.accent);
+        this.specialCinematic = null;
+      }
     }
 
     showBanner(text, seconds) {
@@ -880,7 +977,8 @@
 
     animateStage(time) {
       const seconds = time / 1000;
-      this.stagePulseLight.intensity = 1.1 + Math.sin(seconds * 2.4) * 0.45;
+      const cinematicBoost = this.specialCinematic ? (this.specialCinematic.type === "super" ? 2.6 : 1.4) : 0;
+      this.stagePulseLight.intensity = 1.1 + Math.sin(seconds * 2.4) * 0.45 + cinematicBoost;
       for (const child of this.stageGroup.children) {
         if (child.userData.spin) child.rotation.z += child.userData.spin * 0.016;
         if (child.userData.float !== undefined) {
@@ -923,13 +1021,21 @@
       rig.legL.rotation.z = walk * 0.35;
       rig.legR.rotation.z = -walk * 0.35;
       if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "super") {
-        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "super" ? 0.94 : 0.82;
-        rig.armR.position.set(0.18, 1.08 + crouch, reachPose);
-        rig.armR.rotation.x = Math.PI / 2;
-        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : 0;
-        rig.armR.rotation.z = fighter.state === "super" ? -0.16 : 0;
-        rig.armL.position.set(-0.24, 1.0 + crouch, fighter.state === "super" ? 0.52 : 0.18);
-        rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 : 0.45;
+        const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
+        const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 1;
+        const charge = Math.sin(Math.min(1, progress * 1.35) * Math.PI);
+        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "super" ? 0.98 : 0.84;
+        rig.armR.position.set(0.18, 1.08 + crouch + charge * 0.08, reachPose + charge * (fighter.state === "super" ? 0.22 : 0.14));
+        rig.armR.rotation.x = Math.PI / 2 + (fighter.state === "super" ? charge * 0.38 : 0);
+        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : fighter.state === "super" ? Math.sin(progress * Math.PI * 2) * 0.22 : 0;
+        rig.armR.rotation.z = fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
+        rig.armL.position.set(-0.24, 1.0 + crouch + charge * 0.18, fighter.state === "super" ? 0.62 : 0.24);
+        rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 - charge * 0.36 : 0.45 + charge * 0.42;
+        if (fighter.state === "special" || fighter.state === "super") {
+          rig.body.rotation.x = -0.14 - charge * (fighter.state === "super" ? 0.22 : 0.12);
+          rig.head.position.y += charge * 0.1;
+          rig.group.scale.setScalar(1 + charge * (fighter.state === "super" ? 0.18 : 0.1));
+        }
       }
       if (fighter.state === "crouchLight" || fighter.state === "crouchHeavy") {
         const lowReach = fighter.state === "crouchHeavy" ? 0.9 : 0.58;
@@ -949,7 +1055,7 @@
         rig.armR.rotation.x = 0;
         rig.armR.rotation.y = 0;
         rig.body.rotation.x = -0.18;
-      } else {
+      } else if (fighter.state !== "special" && fighter.state !== "super") {
         rig.body.rotation.x = 0;
       }
       if (fighter.state === "guard") {
@@ -1042,11 +1148,31 @@
     syncEffects() {
       for (const effect of this.effects) {
         effect.mesh.position.copy(this.toWorld(effect.x, effect.y, effect.z));
-        effect.mesh.material.opacity = Math.max(0, effect.life * 3);
+        const ratio = effect.maxLife ? Math.max(0, effect.life / effect.maxLife) : Math.max(0, effect.life * 3);
+        effect.mesh.material.opacity = Math.min(1, ratio * (effect.baseOpacity || 1));
+        if (effect.grow) effect.mesh.scale.setScalar(1 + (1 - ratio) * effect.grow);
       }
     }
 
     syncCamera() {
+      if (this.specialCinematic) {
+        const { fighter, type, timer, duration } = this.specialCinematic;
+        const ratio = Math.max(0, timer / duration);
+        const ease = Math.sin((1 - ratio) * Math.PI);
+        const fighterWorld = this.toWorld(fighter.x, fighter.y - 74, fighter.z);
+        const side = fighter === this.player ? -1 : 1;
+        const forward = new THREE.Vector3(fighter.forwardX || fighter.facing || 1, 0, fighter.forwardZ || 0).normalize();
+        const lateral = new THREE.Vector3(forward.z, 0, -forward.x).multiplyScalar(side * (type === "super" ? 1.55 : 1.25));
+        const distance = type === "super" ? 2.7 : 3.25;
+        const height = type === "super" ? 1.55 : 1.35;
+        const shake = this.shake > 0 ? (Math.random() - 0.5) * 0.08 : 0;
+        this.camera.position.copy(fighterWorld)
+          .add(forward.clone().multiplyScalar(-distance + ease * 0.35))
+          .add(lateral)
+          .add(new THREE.Vector3(shake, height + ease * 0.22, shake));
+        this.camera.lookAt(fighterWorld.clone().add(new THREE.Vector3(0, 0.38 + ease * 0.2, 0)));
+        return;
+      }
       const midX = ((this.player.x + this.cpu.x) / 2 - ARENA_WIDTH / 2) / 75;
       const midZ = (this.player.z + this.cpu.z) / 2 / 80;
       const spread = Math.min(2.2, Math.abs(this.player.x - this.cpu.x) / 260);
@@ -1113,7 +1239,22 @@
     }
 
     clearThreeGroup(group) {
-      while (group.children.length) group.remove(group.children[0]);
+      while (group.children.length) this.removeSceneObject(group.children[0]);
+    }
+
+    removeSceneObject(object) {
+      if (!object) return;
+      if (object.parent) object.parent.remove(object);
+      object.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.filter(Boolean).forEach((material) => {
+          Object.values(material).forEach((value) => {
+            if (value && value.isTexture && typeof value.dispose === "function") value.dispose();
+          });
+          if (typeof material.dispose === "function") material.dispose();
+        });
+      });
     }
   }
 
