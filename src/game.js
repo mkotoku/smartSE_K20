@@ -256,6 +256,7 @@
           const width = 0.42 + (i % 3) * 0.12;
           const building = new THREE.Group();
           building.userData.backdropOccluder = true;
+          building.userData.side = side;
           building.userData.occlusionMeshes = [];
           const tower = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.34), buildingMaterial);
           tower.position.set(0, height / 2 - 0.08, 0);
@@ -1302,7 +1303,7 @@
       });
       for (const occluder of this.backdropOccluders) {
         const meshes = occluder.userData.occlusionMeshes || [];
-        occluder.visible = !this.isBackdropInForeground(occluder) && !targets.some((target) => this.isBackdropBlockingTarget(meshes, target));
+        occluder.visible = !this.isBackdropOnCameraSide(occluder) && !targets.some((target) => this.isBackdropBlockingTarget(meshes, target));
       }
     }
 
@@ -1324,7 +1325,7 @@
       if (!target.screenBounds) return false;
       const blockingMesh = meshes.find((mesh) => {
         const bounds = this.getObjectScreenBounds(mesh, 0.01);
-        return bounds && this.screenBoundsOverlap(bounds, target.screenBounds) && this.isObjectCloserThanTarget(mesh, target.world);
+        return bounds && this.screenBoundsOverlap(bounds, target.screenBounds);
       });
       if (blockingMesh) return true;
 
@@ -1337,17 +1338,10 @@
       return this.occlusionRaycaster.intersectObjects(meshes, false).length > 0;
     }
 
-    isBackdropInForeground(occluder) {
-      const viewDirection = new THREE.Vector3();
-      this.camera.getWorldDirection(viewDirection);
-      viewDirection.y = 0;
-      if (viewDirection.lengthSq() < 0.08) return false;
-      viewDirection.normalize();
-      const center = new THREE.Box3().setFromObject(occluder).getCenter(new THREE.Vector3());
-      const stageCenter = new THREE.Vector3(0, center.y, 0);
-      const stageDepth = stageCenter.clone().sub(this.camera.position).dot(viewDirection);
-      const buildingDepth = center.clone().sub(this.camera.position).dot(viewDirection);
-      return buildingDepth > 0 && buildingDepth < stageDepth - 0.15;
+    isBackdropOnCameraSide(occluder) {
+      const side = occluder.userData.side || 0;
+      if (!side) return false;
+      return this.camera.position.z * side > occluder.position.z * side - 0.12;
     }
 
     getObjectScreenBounds(object, padding = 0) {
@@ -1388,11 +1382,6 @@
 
     screenBoundsOverlap(a, b) {
       return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
-    }
-
-    isObjectCloserThanTarget(object, target) {
-      const objectCenter = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
-      return objectCenter.distanceTo(this.camera.position) < target.distanceTo(this.camera.position) - 0.18;
     }
 
     drawMessage3D() {
