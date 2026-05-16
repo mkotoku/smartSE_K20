@@ -192,13 +192,34 @@
         new THREE.BoxGeometry(1, 1, 1),
         new THREE.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, opacity: 0.34, depthWrite: false })
       );
+      const attackCore = new THREE.Mesh(
+        new THREE.SphereGeometry(0.16, 18, 12),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false })
+      );
+      const attackRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.42, 0.035, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.78, depthWrite: false })
+      );
+      const labelCanvas = document.createElement("canvas");
+      labelCanvas.width = 256;
+      labelCanvas.height = 64;
+      const labelTexture = new THREE.CanvasTexture(labelCanvas);
+      const attackLabel = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: labelTexture,
+        transparent: true,
+        depthWrite: false
+      }));
       attack.visible = false;
-      group.add(body, head, armL, armR, legL, legR, attack);
+      attackCore.visible = false;
+      attackRing.visible = false;
+      attackLabel.visible = false;
+      attackLabel.scale.set(1.8, 0.45, 1);
+      group.add(body, head, armL, armR, legL, legR, attack, attackCore, attackRing, attackLabel);
       [body, head, armL, armR, legL, legR].forEach((part) => {
         part.castShadow = true;
         part.receiveShadow = true;
       });
-      return { group, body, head, armL, armR, legL, legR, attack };
+      return { group, body, head, armL, armR, legL, legR, attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture };
     }
 
     reset(settings) {
@@ -363,6 +384,7 @@
     tryAttack(fighter, type) {
       if (!fighter.startAttack(type)) return false;
       this.sound.play(type === "super" ? "super" : "menu");
+      if (fighter === this.player) this.showBanner(fighter.attack.label.toUpperCase(), 0.32);
       if (type === "special" || type === "super") {
         this.spawnWave(fighter, type);
         this.shake = Math.max(this.shake, type === "super" ? 8 : 4);
@@ -601,6 +623,15 @@
         rig.armR.rotation.z = -1.35;
         rig.armR.rotation.x = fighter.state === "super" ? -0.75 : -0.25;
       }
+      if (fighter.state === "throw") {
+        rig.armL.position.set(-0.38, 1.02 + crouch, 0.18);
+        rig.armR.position.set(0.42, 1.02 + crouch, 0.18);
+        rig.armL.rotation.z = 0.95;
+        rig.armR.rotation.z = -0.95;
+        rig.body.rotation.x = -0.18;
+      } else {
+        rig.body.rotation.x = 0;
+      }
       if (fighter.state === "guard") {
         rig.armL.position.set(-0.12, 1.16 + crouch, 0.2);
         rig.armR.position.set(0.12, 1.16 + crouch, 0.2);
@@ -610,13 +641,72 @@
       if (fighter.state === "down") rig.group.rotation.z = fighter.facing * 1.1;
       else rig.group.rotation.z = 0;
 
-      const box = fighter.attackBox();
-      rig.attack.visible = Boolean(box);
-      if (box) {
-        rig.attack.scale.set(box.width / 70, box.height / 90, box.depth / 70);
-        rig.attack.position.set(fighter.facing * (0.55 + box.width / 140), 0.96, 0);
-        rig.attack.material.color.set(fighter.attack.name === "super" ? 0xffffff : fighter.attack.name === "special" ? 0x7df9ff : 0xffd166);
-      }
+      this.syncAttackCue(rig, fighter);
+    }
+
+    syncAttackCue(rig, fighter) {
+      const attack = fighter.attack;
+      const visible = Boolean(attack);
+      rig.attack.visible = visible;
+      rig.attackCore.visible = visible;
+      rig.attackRing.visible = visible;
+      rig.attackLabel.visible = visible;
+      if (!visible) return;
+
+      const total = attack.startup + attack.active + attack.recovery;
+      const progress = Math.min(1, fighter.attackTimer / total);
+      const activeStart = attack.startup / total;
+      const activeEnd = (attack.startup + attack.active) / total;
+      const isActive = progress >= activeStart && progress <= activeEnd;
+      const colorMap = {
+        light: 0xfef3a1,
+        heavy: 0xff6b4a,
+        special: 0x7df9ff,
+        super: 0xffffff,
+        throw: 0xcaff70
+      };
+      const color = colorMap[attack.name] || 0xffffff;
+      const reach = attack.name === "throw" ? 0.42 : attack.range / 82;
+      const size = attack.name === "light" ? 0.58 : attack.name === "heavy" ? 0.86 : attack.name === "super" ? 1.45 : 1.05;
+      const forward = fighter.facing * (0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22);
+
+      rig.attack.scale.set(reach * size, attack.height / 92, (attack.depth || 80) / 72);
+      rig.attack.position.set(forward, 0.98, 0);
+      rig.attack.material.color.set(color);
+      rig.attack.material.opacity = isActive ? 0.42 : 0.18;
+
+      rig.attackCore.position.set(forward + fighter.facing * 0.28, 1.08 + Math.sin(progress * Math.PI) * 0.16, 0);
+      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
+      rig.attackCore.material.color.set(color);
+      rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
+
+      rig.attackRing.position.copy(rig.attackCore.position);
+      rig.attackRing.rotation.set(Math.PI / 2, 0, progress * Math.PI * 3);
+      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "heavy" ? 1.25 : 1);
+      rig.attackRing.material.color.set(color);
+      rig.attackRing.material.opacity = isActive ? 0.9 : 0.34;
+
+      rig.attackLabel.position.set(0, 2.0, 0);
+      this.drawAttackLabel(rig, attack.label.toUpperCase(), color, isActive);
+    }
+
+    drawAttackLabel(rig, text, color, active) {
+      if (rig.lastAttackText === text && rig.lastAttackActive === active) return;
+      rig.lastAttackText = text;
+      rig.lastAttackActive = active;
+      const ctx = rig.labelCanvas.getContext("2d");
+      ctx.clearRect(0, 0, rig.labelCanvas.width, rig.labelCanvas.height);
+      ctx.globalAlpha = active ? 1 : 0.62;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+      ctx.fillRect(6, 10, 244, 44);
+      ctx.strokeStyle = `#${color.toString(16).padStart(6, "0")}`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(8, 12, 240, 40);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 24px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(text, 128, 40);
+      rig.labelTexture.needsUpdate = true;
     }
 
     syncProjectiles() {
