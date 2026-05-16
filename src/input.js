@@ -8,6 +8,7 @@
     guard: "Guard",
     light: "Light",
     heavy: "Heavy",
+    tornado: "Tornado",
     special: "Special",
     camera: "Camera",
     pause: "Pause"

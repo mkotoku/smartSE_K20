@@ -52,6 +52,29 @@
       sound: "hitSpecial",
       spark: "#7df9ff"
     },
+    tornado: {
+      name: "tornado",
+      label: "Tornado Kick",
+      level: "mid",
+      damage: 8,
+      meterGain: 5,
+      meterCost: 20,
+      startup: 0.1,
+      active: 0.58,
+      recovery: 0.26,
+      range: 82,
+      height: 58,
+      depth: 96,
+      knockback: 210,
+      hitStun: 0.26,
+      cancelWindow: 0,
+      sound: "hitSpecial",
+      spark: "#ffd166",
+      multiHit: true,
+      maxHits: 3,
+      hitInterval: 0.18,
+      moveSpeed: 360
+    },
     super: {
       name: "super",
       label: "Meteor Rush",
@@ -155,6 +178,8 @@
       this.attack = null;
       this.attackTimer = 0;
       this.attackHasHit = false;
+      this.attackHitCount = 0;
+      this.attackHitCooldown = 0;
       this.hitStun = 0;
       this.guard = false;
       this.crouching = false;
@@ -199,6 +224,8 @@
       this.attack = data;
       this.attackTimer = 0;
       this.attackHasHit = false;
+      this.attackHitCount = 0;
+      this.attackHitCooldown = 0;
       this.state = type;
       this.comboChain.push(type);
       this.comboChain = this.comboChain.slice(-4);
@@ -214,11 +241,19 @@
 
       if (this.attack) {
         this.attackTimer += dt;
+        this.attackHitCooldown = Math.max(0, this.attackHitCooldown - dt);
+        if (this.attack.name === "tornado") {
+          this.vx = this.forwardX * this.attack.moveSpeed;
+          this.vz = this.forwardZ * this.attack.moveSpeed;
+          this.vy = Math.min(this.vy, -80);
+        }
         const total = this.attack.startup + this.attack.active + this.attack.recovery;
         if (this.attackTimer >= total) {
           this.attack = null;
           this.attackTimer = 0;
           this.attackHasHit = false;
+          this.attackHitCount = 0;
+          this.attackHitCooldown = 0;
         }
       }
 
@@ -243,7 +278,7 @@
 
       for (const ghost of this.afterImages) ghost.life -= dt;
       this.afterImages = this.afterImages.filter((ghost) => ghost.life > 0);
-      if (this.attack && (this.attack.name === "special" || this.attack.name === "super")) {
+      if (this.attack && (this.attack.name === "special" || this.attack.name === "tornado" || this.attack.name === "super")) {
         this.afterImages.push({ x: this.x, y: this.y, facing: this.facing, life: 0.18, state: this.state });
         this.afterImages = this.afterImages.slice(-8);
       }
@@ -352,6 +387,10 @@
       if (this.state === "light") frontArm = [23, chestY + 10, 58, chestY + 9, 82, chestY + 14];
       if (this.state === "heavy") frontArm = [23, chestY + 12, 60, chestY - 6, 94, chestY + 6];
       if (this.state === "special" || this.state === "super") frontArm = [23, chestY + 8, 66, chestY - 6, 108, chestY + 4];
+      if (this.state === "tornado") {
+        frontArm = [23, chestY + 4, 46, chestY - 16, 72, chestY - 2];
+        backArm = [-22, chestY + 10, -44, chestY - 8, -68, chestY + 4];
+      }
       if (this.state === "guard") {
         frontArm = [20, chestY + 10, 34, chestY - 6, 21, chestY - 20];
         backArm = [-18, chestY + 12, -2, chestY - 10, -12, chestY - 25];
@@ -377,7 +416,7 @@
       const box = this.attackBox();
       if (box && !ghost) {
         const pulse = this.attack.name === "super" ? 0.65 : 0.38;
-        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
+        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "tornado" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
         ctx.beginPath();
         ctx.roundRect(this.width / 2, -88, this.attack.range, this.attack.height, 24);
         ctx.fill();

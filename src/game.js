@@ -578,6 +578,7 @@
       } else {
         if (this.input.consume("light")) this.tryAttack(p, "light");
         if (this.input.consume("heavy")) this.tryAttack(p, "heavy");
+        if (this.input.consume("tornado")) this.tryAttack(p, "tornado");
         if (this.input.consume("special")) this.tryAttack(p, p.meter >= 100 ? "super" : "special");
       }
     }
@@ -620,13 +621,13 @@
           this.cpuPlan = "punish";
           this.cpuMood = "punish";
         } else if (distanceX > 210) {
-          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? "special" : "approach";
+          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? "special" : cpu.meter >= 25 && Math.random() < 0.22 ? "tornado" : "approach";
           this.cpuMood = "closing";
         } else if (distance < 66) {
           this.cpuPlan = Math.random() < 0.45 ? "throw" : Math.random() < 0.5 ? "low" : "retreat";
           this.cpuMood = "scramble";
         } else if (Math.random() < profile.aggression) {
-          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : Math.random() < 0.56 ? "light" : "heavy";
+          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : cpu.meter >= 25 && Math.random() < 0.2 ? "tornado" : Math.random() < 0.56 ? "light" : "heavy";
           this.cpuMood = "attacking";
         } else {
           this.cpuPlan = Math.random() < 0.5 ? "guard" : "retreat";
@@ -658,8 +659,8 @@
           if (distanceZ > 20) cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.75;
         }
       }
-      if (["light", "heavy", "special", "super", "throw"].includes(this.cpuPlan)) {
-        const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "super" ? 158 : 126;
+      if (["light", "heavy", "special", "tornado", "super", "throw"].includes(this.cpuPlan)) {
+        const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "tornado" || this.cpuPlan === "super" ? 158 : 126;
         if (distance < needRange && distanceZ < 62) this.tryAttack(cpu, this.cpuPlan);
         else {
           cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
@@ -672,10 +673,10 @@
       if (!fighter.startAttack(type)) return false;
       this.sound.play(type === "super" ? "super" : "menu");
       if (fighter === this.player) this.showBanner(fighter.attack.label.toUpperCase(), 0.32);
-      if (type === "special" || type === "super") {
+      if (type === "special" || type === "tornado" || type === "super") {
         this.startSpecialCinematic(fighter, type);
         this.spawnSpecialFlare(fighter, type);
-        this.spawnWave(fighter, type);
+        if (type !== "tornado") this.spawnWave(fighter, type);
         this.slowMotion = Math.max(this.slowMotion, type === "super" ? 0.42 : 0.22);
         this.shake = Math.max(this.shake, type === "super" ? 13 : 7);
       }
@@ -683,17 +684,17 @@
     }
 
     startSpecialCinematic(fighter, type) {
-      const length = type === "super" ? 0.52 : 0.34;
+      const length = type === "super" ? 0.52 : type === "tornado" ? 0.28 : 0.34;
       this.specialCinematic = { fighter, type, timer: length, duration: length };
       this.stagePulseLight.intensity = type === "super" ? 3.6 : 2.5;
-      this.stagePulseLight.color.set(type === "super" ? 0xffffff : 0x7df9ff);
-      if (fighter === this.player) this.showBanner(type === "super" ? "METEOR RUSH" : "SURGE DRIVE", 0.48);
+      this.stagePulseLight.color.set(type === "super" ? 0xffffff : type === "tornado" ? 0xffd166 : 0x7df9ff);
+      if (fighter === this.player) this.showBanner(type === "super" ? "METEOR RUSH" : type === "tornado" ? "TORNADO KICK" : "SURGE DRIVE", 0.48);
     }
 
     spawnSpecialFlare(fighter, type) {
-      const color = type === "super" ? 0xfff4a8 : 0x7df9ff;
+      const color = type === "super" ? 0xfff4a8 : type === "tornado" ? 0xffd166 : 0x7df9ff;
       const center = this.toWorld(fighter.x, fighter.y - 76, fighter.z);
-      const ringCount = type === "super" ? 4 : 3;
+      const ringCount = type === "super" ? 4 : type === "tornado" ? 5 : 3;
       for (let i = 0; i < ringCount; i++) {
         const ring = new THREE.Mesh(
           new THREE.TorusGeometry(0.45 + i * 0.16, 0.018, 8, 80),
@@ -711,7 +712,7 @@
           vz: fighter.forwardZ * 0.08,
           life: 0.42 + i * 0.04,
           maxLife: 0.42 + i * 0.04,
-          spin: type === "super" ? 6.2 : 4.4,
+          spin: type === "super" ? 6.2 : type === "tornado" ? 8.4 : 4.4,
           grow: 1.8 + i * 0.25,
           mesh: ring
         });
@@ -736,7 +737,7 @@
         grow: 0.65,
         mesh: pillar
       });
-      const slashCount = type === "super" ? 18 : 10;
+      const slashCount = type === "super" ? 18 : type === "tornado" ? 16 : 10;
       for (let i = 0; i < slashCount; i++) {
         const slash = new THREE.Mesh(
           new THREE.BoxGeometry(0.035, 0.018, type === "super" ? 0.95 : 0.68),
@@ -859,7 +860,12 @@
     }
 
     resolveAttack(attacker, defender) {
-      if (!attacker.attack || attacker.attackHasHit) return;
+      if (!attacker.attack) return;
+      if (attacker.attack.multiHit) {
+        if (attacker.attackHitCount >= attacker.attack.maxHits || attacker.attackHitCooldown > 0) return;
+      } else if (attacker.attackHasHit) {
+        return;
+      }
       const attackBox = attacker.attackBox();
       if (!attackBox || !rectsOverlap(attackBox, defender.bounds)) return;
       if (!attacker.attack.unblockable && !this.isFacing(attacker, defender)) return;
@@ -873,7 +879,13 @@
       const sparkY = attackBox.y + attackBox.height * 0.45;
       const sparkZ = attacker.z + attacker.forwardZ * (attacker.attack.range + 20);
       this.applyHit(attacker, defender, attacker.attack, blocked, sparkX, sparkY, sparkZ);
-      attacker.attackHasHit = true;
+      if (attacker.attack.multiHit) {
+        attacker.attackHitCount += 1;
+        attacker.attackHitCooldown = attacker.attack.hitInterval || 0.16;
+        attacker.attackHasHit = attacker.attackHitCount >= attacker.attack.maxHits;
+      } else {
+        attacker.attackHasHit = true;
+      }
     }
 
     isFacing(source, target) {
@@ -1089,15 +1101,15 @@
       rig.legR.rotation.z = -walk * 0.35;
       rig.bootL.rotation.copy(rig.legL.rotation);
       rig.bootR.rotation.copy(rig.legR.rotation);
-      if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "super") {
+      if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "tornado" || fighter.state === "super") {
         const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
         const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 1;
         const charge = Math.sin(Math.min(1, progress * 1.35) * Math.PI);
-        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "super" ? 0.98 : 0.84;
+        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "tornado" ? 0.72 : fighter.state === "super" ? 0.98 : 0.84;
         rig.armR.position.set(0.18, 1.08 + crouch + charge * 0.08, reachPose + charge * (fighter.state === "super" ? 0.22 : 0.14));
         rig.armR.rotation.x = Math.PI / 2 + (fighter.state === "super" ? charge * 0.38 : 0);
-        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : fighter.state === "super" ? Math.sin(progress * Math.PI * 2) * 0.22 : 0;
-        rig.armR.rotation.z = fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
+        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.55 : fighter.state === "super" ? Math.sin(progress * Math.PI * 2) * 0.22 : 0;
+        rig.armR.rotation.z = fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.7 : fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
         rig.armL.position.set(-0.24, 1.0 + crouch + charge * 0.18, fighter.state === "super" ? 0.62 : 0.24);
         rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 - charge * 0.36 : 0.45 + charge * 0.42;
         rig.handR.position.set(0.18, 0.74 + crouch + charge * 0.08, reachPose + 0.4 + charge * 0.16);
@@ -1108,10 +1120,20 @@
         rig.shoulderR.position.set(0.22, 1.22 + crouch + charge * 0.04, 0.18);
         rig.shoulderL.rotation.copy(rig.armL.rotation);
         rig.shoulderR.rotation.copy(rig.armR.rotation);
-        if (fighter.state === "special" || fighter.state === "super") {
+        if (fighter.state === "special" || fighter.state === "tornado" || fighter.state === "super") {
           rig.body.rotation.x = -0.14 - charge * (fighter.state === "super" ? 0.22 : 0.12);
           rig.head.position.y += charge * 0.1;
           rig.group.scale.setScalar(1 + charge * (fighter.state === "super" ? 0.18 : 0.1));
+          if (fighter.state === "tornado") {
+            const spin = progress * Math.PI * 8;
+            rig.body.rotation.y = spin;
+            rig.legL.rotation.x = Math.PI / 2 + Math.sin(spin) * 0.4;
+            rig.legR.rotation.x = Math.PI / 2 + Math.cos(spin) * 0.4;
+            rig.bootL.position.set(-0.18, 0.48 + Math.cos(spin) * 0.08, 0.68);
+            rig.bootR.position.set(0.18, 0.48 + Math.sin(spin) * 0.08, 0.68);
+            rig.bootL.rotation.copy(rig.legL.rotation);
+            rig.bootR.rotation.copy(rig.legR.rotation);
+          }
         }
       }
       if (fighter.state === "crouchLight" || fighter.state === "crouchHeavy") {
@@ -1141,8 +1163,9 @@
         rig.handR.position.set(0.56, 0.72 + crouch, 0.34);
         rig.handL.rotation.copy(rig.armL.rotation);
         rig.handR.rotation.copy(rig.armR.rotation);
-      } else if (fighter.state !== "special" && fighter.state !== "super") {
+      } else if (fighter.state !== "special" && fighter.state !== "tornado" && fighter.state !== "super") {
         rig.body.rotation.x = 0;
+        rig.body.rotation.y = 0;
       }
       if (fighter.state === "guard") {
         rig.armL.position.set(-0.12, 1.16 + crouch, 0.2);
@@ -1176,6 +1199,7 @@
         light: 0xfef3a1,
         heavy: 0xff6b4a,
         special: 0x7df9ff,
+        tornado: 0xffd166,
         super: 0xffffff,
         throw: 0xcaff70,
         crouchLight: 0xcaff70,
@@ -1183,7 +1207,7 @@
       };
       const color = colorMap[attack.name] || 0xffffff;
       const reach = attack.name === "throw" ? 0.42 : attack.range / 82;
-      const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "super" ? 1.45 : 1.05;
+      const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "tornado" ? 1.18 : attack.name === "super" ? 1.45 : 1.05;
       const forward = 0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22;
       const lateral = attack.name === "heavy" ? Math.sin(progress * Math.PI * 2) * 0.08 : 0;
 
@@ -1193,13 +1217,13 @@
       rig.attack.material.opacity = isActive ? 0.42 : 0.18;
 
       rig.attackCore.position.set(lateral, (attack.level === "low" ? 0.48 : 1.08) + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
-      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
+      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "tornado" ? 1.5 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
       rig.attackCore.material.color.set(color);
       rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
 
       rig.attackRing.position.copy(rig.attackCore.position);
       rig.attackRing.rotation.set(Math.PI / 2, 0, progress * Math.PI * 3);
-      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "heavy" ? 1.25 : 1);
+      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "tornado" ? 1.45 : attack.name === "heavy" ? 1.25 : 1);
       rig.attackRing.material.color.set(color);
       rig.attackRing.material.opacity = isActive ? 0.9 : 0.34;
 

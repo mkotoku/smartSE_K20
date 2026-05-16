@@ -24,6 +24,7 @@
         guard: "KeyS",
         light: "KeyJ",
         heavy: "KeyK",
+        tornado: "KeyI",
         special: "KeyL",
         camera: "KeyC",
         pause: "Escape"
