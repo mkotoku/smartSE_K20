@@ -1294,26 +1294,105 @@
       if (!this.backdropOccluders.length || !this.occlusionRaycaster) return;
       this.scene.updateMatrixWorld(true);
       const targets = [
-        this.playerRig.group.position.clone().add(new THREE.Vector3(0, 1.15, 0)),
-        this.cpuRig.group.position.clone().add(new THREE.Vector3(0, 1.15, 0))
+        this.getFighterOcclusionTarget(this.playerRig),
+        this.getFighterOcclusionTarget(this.cpuRig)
       ];
       this.backdropOccluders.forEach((occluder) => {
         occluder.visible = true;
       });
       for (const occluder of this.backdropOccluders) {
         const meshes = occluder.userData.occlusionMeshes || [];
-        occluder.visible = !targets.some((target) => this.isBackdropBlockingTarget(meshes, target));
+        occluder.visible = !this.isBackdropInForeground(occluder) && !targets.some((target) => this.isBackdropBlockingTarget(meshes, target));
       }
     }
 
+    getFighterOcclusionTarget(rig) {
+      const center = rig.group.position.clone().add(new THREE.Vector3(0, 0.96, 0));
+      const points = [
+        center.clone().add(new THREE.Vector3(-0.46, -0.82, 0)),
+        center.clone().add(new THREE.Vector3(0.46, -0.82, 0)),
+        center.clone().add(new THREE.Vector3(-0.46, 0.74, 0)),
+        center.clone().add(new THREE.Vector3(0.46, 0.74, 0))
+      ];
+      return {
+        world: center,
+        screenBounds: this.getProjectedBounds(points, 0.035)
+      };
+    }
+
     isBackdropBlockingTarget(meshes, target) {
-      const toTarget = target.clone().sub(this.camera.position);
+      if (!target.screenBounds) return false;
+      const blockingMesh = meshes.find((mesh) => {
+        const bounds = this.getObjectScreenBounds(mesh, 0.01);
+        return bounds && this.screenBoundsOverlap(bounds, target.screenBounds) && this.isObjectCloserThanTarget(mesh, target.world);
+      });
+      if (blockingMesh) return true;
+
+      const toTarget = target.world.clone().sub(this.camera.position);
       const distance = toTarget.length();
       if (distance <= 0.25) return false;
       this.occlusionRaycaster.set(this.camera.position, toTarget.normalize());
       this.occlusionRaycaster.near = 0.1;
       this.occlusionRaycaster.far = distance - 0.25;
       return this.occlusionRaycaster.intersectObjects(meshes, false).length > 0;
+    }
+
+    isBackdropInForeground(occluder) {
+      const viewDirection = new THREE.Vector3();
+      this.camera.getWorldDirection(viewDirection);
+      viewDirection.y = 0;
+      if (viewDirection.lengthSq() < 0.08) return false;
+      viewDirection.normalize();
+      const center = new THREE.Box3().setFromObject(occluder).getCenter(new THREE.Vector3());
+      const stageCenter = new THREE.Vector3(0, center.y, 0);
+      const stageDepth = stageCenter.clone().sub(this.camera.position).dot(viewDirection);
+      const buildingDepth = center.clone().sub(this.camera.position).dot(viewDirection);
+      return buildingDepth > 0 && buildingDepth < stageDepth - 0.15;
+    }
+
+    getObjectScreenBounds(object, padding = 0) {
+      const box = new THREE.Box3().setFromObject(object);
+      if (box.isEmpty()) return null;
+      const points = [
+        new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+        new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+        new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+        new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+        new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+        new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+        new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+        new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+      ];
+      return this.getProjectedBounds(points, padding);
+    }
+
+    getProjectedBounds(points, padding = 0) {
+      const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      let visiblePointCount = 0;
+      points.forEach((point) => {
+        const projected = point.clone().project(this.camera);
+        if (projected.z < -1 || projected.z > 1) return;
+        visiblePointCount += 1;
+        bounds.minX = Math.min(bounds.minX, projected.x);
+        bounds.maxX = Math.max(bounds.maxX, projected.x);
+        bounds.minY = Math.min(bounds.minY, projected.y);
+        bounds.maxY = Math.max(bounds.maxY, projected.y);
+      });
+      if (!visiblePointCount) return null;
+      bounds.minX -= padding;
+      bounds.maxX += padding;
+      bounds.minY -= padding;
+      bounds.maxY += padding;
+      return bounds;
+    }
+
+    screenBoundsOverlap(a, b) {
+      return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+    }
+
+    isObjectCloserThanTarget(object, target) {
+      const objectCenter = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
+      return objectCenter.distanceTo(this.camera.position) < target.distanceTo(this.camera.position) - 0.18;
     }
 
     drawMessage3D() {
