@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-label="Street Clash gameplay animation">
+  <style>
+    .bg { fill: #10162b; }
+    .grid { stroke: #2ee8b6; stroke-width: 2; opacity: .28; }
+    .neon { stroke: #7df9ff; stroke-width: 5; fill: none; filter: url(#glow); }
+    .label { fill: #fff; font: 800 34px system-ui, sans-serif; letter-spacing: 0; }
+    .small { fill: #c9d7ff; font: 700 18px system-ui, sans-serif; letter-spacing: 0; }
+    .playerBody { fill: #2f80ed; }
+    .cpuBody { fill: #e94f64; }
+    .skin { fill: #ffc58a; }
+    .dark { fill: #151923; }
+    .accent { fill: #ffd166; }
+    .wave { fill: #7df9ff; opacity: .72; filter: url(#glow); }
+    .burst { stroke: #fff4a8; stroke-width: 6; stroke-linecap: round; filter: url(#glow); }
+    #player { animation: dash 2.4s ease-in-out infinite; transform-origin: center; }
+    #cpu { animation: recoil 2.4s ease-in-out infinite; transform-origin: center; }
+    #wave { animation: wave 2.4s ease-in-out infinite; transform-origin: center; }
+    #camera { animation: flash 2.4s ease-in-out infinite; }
+    #burst { animation: burst 2.4s ease-in-out infinite; transform-origin: 510px 205px; }
+    @keyframes dash {
+      0%, 100% { transform: translateX(0) scale(1); }
+      34% { transform: translateX(38px) scale(1.02); }
+      52% { transform: translateX(104px) scale(1.12); }
+      70% { transform: translateX(74px) scale(1.03); }
+    }
+    @keyframes recoil {
+      0%, 44%, 100% { transform: translateX(0) rotate(0deg); }
+      56% { transform: translateX(38px) rotate(4deg); }
+      72% { transform: translateX(18px) rotate(0deg); }
+    }
+    @keyframes wave {
+      0%, 30% { transform: translateX(0) scale(.2); opacity: 0; }
+      46% { transform: translateX(95px) scale(1); opacity: .95; }
+      70% { transform: translateX(265px) scale(1.35); opacity: .18; }
+      100% { transform: translateX(330px) scale(1.5); opacity: 0; }
+    }
+    @keyframes flash {
+      0%, 34%, 100% { opacity: .08; }
+      48%, 58% { opacity: .65; }
+    }
+    @keyframes burst {
+      0%, 38%, 100% { transform: scale(.2) rotate(0deg); opacity: 0; }
+      52% { transform: scale(1) rotate(18deg); opacity: 1; }
+      74% { transform: scale(1.35) rotate(42deg); opacity: 0; }
+    }
+  </style>
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="floor" x1="0" x2="1">
+      <stop offset="0" stop-color="#1d2441"/>
+      <stop offset="0.5" stop-color="#29344f"/>
+      <stop offset="1" stop-color="#1c1834"/>
+    </linearGradient>
+  </defs>
+  <rect class="bg" width="960" height="420"/>
+  <rect id="camera" width="960" height="420" fill="#7df9ff"/>
+  <text class="label" x="46" y="58">Street Clash</text>
+  <text class="small" x="48" y="88">3D movement, voxel fighters, cinematic special moves</text>
+  <polygon points="120,320 840,320 720,210 240,210" fill="url(#floor)" stroke="#56d6a6" stroke-width="4"/>
+  <g opacity=".7">
+    <line class="grid" x1="180" y1="298" x2="780" y2="298"/>
+    <line class="grid" x1="220" y1="270" x2="740" y2="270"/>
+    <line class="grid" x1="260" y1="242" x2="700" y2="242"/>
+    <line class="grid" x1="250" y1="210" x2="125" y2="320"/>
+    <line class="grid" x1="390" y1="210" x2="345" y2="320"/>
+    <line class="grid" x1="570" y1="210" x2="615" y2="320"/>
+    <line class="grid" x1="710" y1="210" x2="835" y2="320"/>
+  </g>
+  <ellipse class="neon" cx="480" cy="294" rx="255" ry="54"/>
+  <g id="player">
+    <rect class="dark" x="226" y="138" width="70" height="24"/>
+    <rect class="skin" x="232" y="150" width="58" height="58"/>
+    <rect class="dark" x="242" y="168" width="8" height="10"/>
+    <rect class="dark" x="272" y="168" width="8" height="10"/>
+    <rect class="playerBody" x="230" y="212" width="64" height="86"/>
+    <rect class="accent" x="224" y="218" width="22" height="22"/>
+    <rect class="accent" x="278" y="218" width="22" height="22"/>
+    <rect class="playerBody" x="198" y="226" width="24" height="78"/>
+    <rect class="playerBody" x="302" y="204" width="112" height="24"/>
+    <rect class="skin" x="410" y="199" width="26" height="32"/>
+    <rect class="dark" x="238" y="298" width="24" height="70"/>
+    <rect class="dark" x="268" y="298" width="24" height="70"/>
+    <rect class="accent" x="228" y="288" width="76" height="12"/>
+  </g>
+  <circle id="wave" class="wave" cx="450" cy="214" r="34"/>
+  <g id="burst">
+    <line class="burst" x1="510" y1="150" x2="510" y2="94"/>
+    <line class="burst" x1="510" y1="260" x2="510" y2="316"/>
+    <line class="burst" x1="454" y1="205" x2="398" y2="205"/>
+    <line class="burst" x1="566" y1="205" x2="622" y2="205"/>
+    <line class="burst" x1="470" y1="165" x2="430" y2="125"/>
+    <line class="burst" x1="550" y1="245" x2="590" y2="285"/>
+  </g>
+  <g id="cpu">
+    <rect class="dark" x="655" y="146" width="70" height="24"/>
+    <rect class="skin" x="661" y="158" width="58" height="58"/>
+    <rect class="dark" x="674" y="176" width="8" height="10"/>
+    <rect class="dark" x="704" y="176" width="8" height="10"/>
+    <rect class="cpuBody" x="660" y="220" width="64" height="82"/>
+    <rect class="accent" x="654" y="226" width="22" height="22"/>
+    <rect class="accent" x="708" y="226" width="22" height="22"/>
+    <rect class="cpuBody" x="630" y="232" width="24" height="72"/>
+    <rect class="cpuBody" x="730" y="232" width="24" height="72"/>
+    <rect class="dark" x="666" y="302" width="24" height="64"/>
+    <rect class="dark" x="696" y="302" width="24" height="64"/>
+    <rect class="accent" x="652" y="296" width="80" height="12"/>
+  </g>
+  <text class="small" x="392" y="374">L: cinematic special</text>
+</svg>
