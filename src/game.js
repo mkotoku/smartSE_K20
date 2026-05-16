@@ -660,18 +660,28 @@
       rig.legR.position.set(0.16, 0.32, -0.05);
       rig.armL.rotation.z = 0.45;
       rig.armR.rotation.z = -0.45;
+      rig.armL.rotation.x = 0;
+      rig.armL.rotation.y = 0;
+      rig.armR.rotation.x = 0;
+      rig.armR.rotation.y = 0;
       rig.legL.rotation.z = walk * 0.35;
       rig.legR.rotation.z = -walk * 0.35;
       if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "super") {
-        rig.armR.position.x = 0.62;
-        rig.armR.rotation.z = -1.35;
-        rig.armR.rotation.x = fighter.state === "super" ? -0.75 : -0.25;
+        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "super" ? 0.94 : 0.82;
+        rig.armR.position.set(0.18, 1.08 + crouch, reachPose);
+        rig.armR.rotation.x = Math.PI / 2;
+        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : 0;
+        rig.armR.rotation.z = fighter.state === "super" ? -0.16 : 0;
+        rig.armL.position.set(-0.24, 1.0 + crouch, fighter.state === "super" ? 0.52 : 0.18);
+        rig.armL.rotation.x = fighter.state === "super" ? Math.PI / 2 : 0.45;
       }
       if (fighter.state === "throw") {
         rig.armL.position.set(-0.38, 1.02 + crouch, 0.18);
         rig.armR.position.set(0.42, 1.02 + crouch, 0.18);
         rig.armL.rotation.z = 0.95;
         rig.armR.rotation.z = -0.95;
+        rig.armR.rotation.x = 0;
+        rig.armR.rotation.y = 0;
         rig.body.rotation.x = -0.18;
       } else {
         rig.body.rotation.x = 0;
