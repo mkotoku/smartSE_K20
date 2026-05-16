@@ -114,6 +114,7 @@
       this.cameraMode = "auto";
       this.cameraYaw = 0;
       this.cameraHeightOffset = 0;
+      this.backdropOccluders = [];
       this.lastResult = null;
       this.init3D();
     }
@@ -129,6 +130,7 @@
       this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
       this.camera.position.set(0, 5.4, 8.8);
       this.camera.lookAt(0, 1.1, 0);
+      this.occlusionRaycaster = new THREE.Raycaster();
 
       this.scene.add(new THREE.HemisphereLight(0xbfd7ff, 0x1b1b22, 1.2));
       const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -161,6 +163,7 @@
       this.stagePulseLight.color.set(theme.accent);
       this.disposeStageObjects();
       this.stageGroup.clear();
+      this.backdropOccluders = [];
 
       const floorMaterial = new THREE.MeshStandardMaterial({
         color: theme.floor,
@@ -251,14 +254,21 @@
         for (let i = 0; i < 9; i++) {
           const height = 1.4 + ((i * 37) % 6) * 0.35;
           const width = 0.42 + (i % 3) * 0.12;
+          const building = new THREE.Group();
+          building.userData.backdropOccluder = true;
+          building.userData.occlusionMeshes = [];
           const tower = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.34), buildingMaterial);
-          tower.position.set(-5.3 + i * 1.3, height / 2 - 0.08, side * 3.05);
-          this.stageGroup.add(tower);
+          tower.position.set(0, height / 2 - 0.08, 0);
+          building.add(tower);
+          building.userData.occlusionMeshes.push(tower);
           for (let w = 0; w < 3; w++) {
             const windowStrip = new THREE.Mesh(new THREE.BoxGeometry(width * 0.68, 0.035, 0.025), glassMaterial);
-            windowStrip.position.set(tower.position.x, 0.45 + w * 0.42, side * 2.86);
-            this.stageGroup.add(windowStrip);
+            windowStrip.position.set(0, 0.45 + w * 0.42, -side * 0.19);
+            building.add(windowStrip);
           }
+          building.position.set(-5.3 + i * 1.3, 0, side * 3.05);
+          this.backdropOccluders.push(building);
+          this.stageGroup.add(building);
         }
       }
     }
@@ -998,6 +1008,7 @@
       this.syncProjectiles();
       this.syncEffects();
       this.syncCamera();
+      this.updateBackdropVisibility();
       this.drawMessage3D();
       this.renderer.render(this.scene, this.camera);
     }
@@ -1277,6 +1288,32 @@
         target.z + Math.cos(yaw) * distance + midZ * 0.25
       );
       this.camera.lookAt(target);
+    }
+
+    updateBackdropVisibility() {
+      if (!this.backdropOccluders.length || !this.occlusionRaycaster) return;
+      this.scene.updateMatrixWorld(true);
+      const targets = [
+        this.playerRig.group.position.clone().add(new THREE.Vector3(0, 1.15, 0)),
+        this.cpuRig.group.position.clone().add(new THREE.Vector3(0, 1.15, 0))
+      ];
+      this.backdropOccluders.forEach((occluder) => {
+        occluder.visible = true;
+      });
+      for (const occluder of this.backdropOccluders) {
+        const meshes = occluder.userData.occlusionMeshes || [];
+        occluder.visible = !targets.some((target) => this.isBackdropBlockingTarget(meshes, target));
+      }
+    }
+
+    isBackdropBlockingTarget(meshes, target) {
+      const toTarget = target.clone().sub(this.camera.position);
+      const distance = toTarget.length();
+      if (distance <= 0.25) return false;
+      this.occlusionRaycaster.set(this.camera.position, toTarget.normalize());
+      this.occlusionRaycaster.near = 0.1;
+      this.occlusionRaycaster.far = distance - 0.25;
+      return this.occlusionRaycaster.intersectObjects(meshes, false).length > 0;
     }
 
     drawMessage3D() {
