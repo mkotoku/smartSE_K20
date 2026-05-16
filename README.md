@@ -10,4 +10,7 @@ Controls:
 - J: light attack
 - K: heavy attack
 - L: special / super when meter is full
+- C: switch camera view
+- Arrow Left/Right: rotate camera
+- Arrow Up/Down: raise/lower camera
 - Escape: pause

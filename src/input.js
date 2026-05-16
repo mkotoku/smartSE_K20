@@ -9,6 +9,7 @@
     light: "Light",
     heavy: "Heavy",
     special: "Special",
+    camera: "Camera",
     pause: "Pause"
   };
 
@@ -52,6 +53,10 @@
 
     isDown(action) {
       return this.downCodes.has(this.keys[action]);
+    }
+
+    isCodeDown(code) {
+      return this.downCodes.has(code);
     }
 
     consume(action) {

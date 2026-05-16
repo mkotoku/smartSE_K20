@@ -25,6 +25,7 @@
         light: "KeyJ",
         heavy: "KeyK",
         special: "KeyL",
+        camera: "KeyC",
         pause: "Escape"
       }
     }

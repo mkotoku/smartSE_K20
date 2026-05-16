@@ -98,6 +98,11 @@
       this.slowMotion = 0;
       this.banner = "";
       this.bannerTimer = 0;
+      this.cameraModes = ["auto", "side", "top", "orbit"];
+      this.cameraModeIndex = 0;
+      this.cameraMode = "auto";
+      this.cameraYaw = 0;
+      this.cameraHeightOffset = 0;
       this.lastResult = null;
       this.init3D();
     }
@@ -284,6 +289,7 @@
       if (this.combo.timer <= 0) this.combo = { owner: null, hits: 0, damage: 0, timer: 0 };
 
       this.faceEachOther();
+      this.handleCameraInput(dt);
       this.handlePlayerInput();
       this.handleCpu(dt);
       this.updateProjectiles(dt);
@@ -319,6 +325,21 @@
         if (this.input.consume("heavy")) this.tryAttack(p, "heavy");
         if (this.input.consume("special")) this.tryAttack(p, p.meter >= 100 ? "super" : "special");
       }
+    }
+
+    handleCameraInput(dt) {
+      if (this.input.consume("camera")) {
+        this.cameraModeIndex = (this.cameraModeIndex + 1) % this.cameraModes.length;
+        this.cameraMode = this.cameraModes[this.cameraModeIndex];
+        this.showBanner(`CAMERA ${this.cameraMode.toUpperCase()}`, 0.55);
+      }
+      const turnSpeed = 1.55;
+      const heightSpeed = 2.1;
+      if (this.input.isCodeDown && this.input.isCodeDown("ArrowLeft")) this.cameraYaw -= turnSpeed * dt;
+      if (this.input.isCodeDown && this.input.isCodeDown("ArrowRight")) this.cameraYaw += turnSpeed * dt;
+      if (this.input.isCodeDown && this.input.isCodeDown("ArrowUp")) this.cameraHeightOffset += heightSpeed * dt;
+      if (this.input.isCodeDown && this.input.isCodeDown("ArrowDown")) this.cameraHeightOffset -= heightSpeed * dt;
+      this.cameraHeightOffset = Math.max(-1.4, Math.min(2.6, this.cameraHeightOffset));
     }
 
     handleCpu(dt) {
@@ -729,8 +750,29 @@
       const spread = Math.min(2.2, Math.abs(this.player.x - this.cpu.x) / 260);
       const shakeX = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.015 : 0;
       const shakeY = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.015 : 0;
-      this.camera.position.set(midX + shakeX, 5.1 + shakeY, 8.2 + spread + midZ * 0.25);
-      this.camera.lookAt(midX, 1.0, midZ);
+      const target = new THREE.Vector3(midX, 1.0, midZ);
+      let distance = 8.2 + spread;
+      let height = 5.1 + this.cameraHeightOffset;
+      let yaw = this.cameraYaw;
+      if (this.cameraMode === "side") {
+        yaw += 0;
+        distance = 8.6 + spread;
+        height = 4.7 + this.cameraHeightOffset;
+      } else if (this.cameraMode === "top") {
+        yaw += 0.2;
+        distance = 2.6;
+        height = 10.2 + this.cameraHeightOffset;
+      } else if (this.cameraMode === "orbit") {
+        yaw += performance.now() * 0.00028;
+        distance = 8.7 + spread;
+        height = 5.4 + this.cameraHeightOffset;
+      }
+      this.camera.position.set(
+        target.x + Math.sin(yaw) * distance + shakeX,
+        height + shakeY,
+        target.z + Math.cos(yaw) * distance + midZ * 0.25
+      );
+      this.camera.lookAt(target);
     }
 
     drawMessage3D() {

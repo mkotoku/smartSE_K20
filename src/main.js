@@ -18,6 +18,7 @@
   const playerRounds = document.getElementById("playerRounds");
   const cpuRounds = document.getElementById("cpuRounds");
   const comboReadout = document.getElementById("comboReadout");
+  const cameraReadout = document.getElementById("cameraReadout");
   const timer = document.getElementById("timer");
   const keyGrid = document.getElementById("keyGrid");
   const difficultySelect = document.getElementById("difficultySelect");
@@ -90,6 +91,7 @@
     cpuMeter.style.width = `${game.cpu.meter}%`;
     playerRounds.textContent = game.playerRounds;
     cpuRounds.textContent = game.cpuRounds;
+    cameraReadout.textContent = `CAM ${game.cameraMode.toUpperCase()}`;
     comboReadout.textContent = game.combo.timer > 0 && game.combo.hits >= 2 && game.combo.owner === game.player ? `${game.combo.hits} HIT` : "";
     timer.textContent = Math.ceil(game.roundTime);
   }
