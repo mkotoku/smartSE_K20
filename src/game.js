@@ -42,11 +42,24 @@
       this.volume = volume;
     }
 
+    ensureContext() {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      if (!this.context) this.context = new AudioContext();
+      return this.context;
+    }
+
     play(kind) {
       if (this.volume <= 0) return;
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      if (!this.context) this.context = new AudioContext();
+      if (kind === "applause") {
+        this.playApplause();
+        return;
+      }
+      if (kind === "crowd") {
+        this.playCrowd();
+        return;
+      }
+      if (!this.ensureContext()) return;
       const now = this.context.currentTime;
       const notes = {
         hitLight: [[360, 0.05]],
@@ -73,6 +86,56 @@
         oscillator.connect(gain).connect(this.context.destination);
         oscillator.start(start);
         oscillator.stop(start + length + 0.02);
+      });
+    }
+
+    playNoiseBurst(start, length, frequency, amount) {
+      const context = this.ensureContext();
+      if (!context) return;
+      const buffer = context.createBuffer(1, Math.max(1, context.sampleRate * length), context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * amount;
+      const source = context.createBufferSource();
+      const filter = context.createBiquadFilter();
+      const gain = context.createGain();
+      source.buffer = buffer;
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(frequency, start);
+      filter.Q.setValueAtTime(1.7, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume * 0.2), start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+      source.connect(filter).connect(gain).connect(context.destination);
+      source.start(start);
+      source.stop(start + length + 0.02);
+    }
+
+    playApplause() {
+      const context = this.ensureContext();
+      if (!context) return;
+      const now = context.currentTime;
+      for (let i = 0; i < 18; i++) {
+        this.playNoiseBurst(now + i * 0.045 + Math.random() * 0.025, 0.035 + Math.random() * 0.025, 1500 + Math.random() * 1800, 0.7);
+      }
+    }
+
+    playCrowd() {
+      const context = this.ensureContext();
+      if (!context) return;
+      const now = context.currentTime;
+      this.playNoiseBurst(now, 0.9, 420 + Math.random() * 120, 0.35);
+      [[440, 0.18], [554, 0.18], [659, 0.24], [880, 0.28]].forEach(([freq, length], index) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const start = now + index * 0.075;
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume * 0.08), start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + length + 0.03);
       });
     }
   }
@@ -109,6 +172,7 @@
       this.bannerTimer = 0;
       this.ringoutWinner = null;
       this.specialCinematic = null;
+      this.victoryCinematic = null;
       this.cameraModes = ["auto", "side", "top", "orbit"];
       this.cameraModeIndex = 0;
       this.cameraMode = "auto";
@@ -433,6 +497,7 @@
       this.shake = 0;
       this.slowMotion = 0;
       this.specialCinematic = null;
+      this.victoryCinematic = null;
       this.effects = [];
       this.projectiles = [];
       this.clearThreeGroup(this.projectileGroup);
@@ -461,6 +526,13 @@
       this.roundTime = Math.max(0, this.roundTime - dt);
       this.bannerTimer = Math.max(0, this.bannerTimer - dt);
       this.shake = Math.max(0, this.shake - dt * 35);
+      if (this.finished) {
+        this.updateVictoryCinematic(dt);
+        this.player.update(dt, ARENA_WIDTH + 160, ARENA_DEPTH + 260, this.isOnStage(this.player));
+        this.cpu.update(dt, ARENA_WIDTH + 160, ARENA_DEPTH + 260, this.isOnStage(this.cpu));
+        this.updateEffects(dt);
+        return;
+      }
       this.combo.timer = Math.max(0, this.combo.timer - dt);
       if (this.combo.timer <= 0) this.combo = { owner: null, hits: 0, damage: 0, timer: 0 };
 
@@ -970,6 +1042,78 @@
       }
     }
 
+    startVictoryCinematic(winner) {
+      const winnerFighter = winner === "player" ? this.player : winner === "cpu" ? this.cpu : null;
+      const loserFighter = winner === "player" ? this.cpu : winner === "cpu" ? this.player : null;
+      this.victoryCinematic = {
+        winner,
+        winnerFighter,
+        loserFighter,
+        timer: 3.2,
+        duration: 3.2,
+        confettiTimer: 0,
+        applauseTimer: 0.18,
+        crowdTimer: 0.45
+      };
+      this.shake = Math.max(this.shake, winner === "draw" ? 2 : 4);
+      if (winner === "player") {
+        this.sound.play("crowd");
+        this.sound.play("applause");
+      } else if (winner === "cpu") {
+        this.sound.play("applause");
+      }
+      this.spawnConfetti(winnerFighter || this.player, winner === "draw" ? 30 : 52);
+    }
+
+    updateVictoryCinematic(dt) {
+      if (!this.victoryCinematic) return;
+      const cinematic = this.victoryCinematic;
+      cinematic.timer = Math.max(0, cinematic.timer - dt);
+      cinematic.confettiTimer -= dt;
+      cinematic.applauseTimer -= dt;
+      cinematic.crowdTimer -= dt;
+      if (cinematic.confettiTimer <= 0) {
+        cinematic.confettiTimer = 0.18;
+        this.spawnConfetti(cinematic.winnerFighter || this.player, cinematic.winner === "draw" ? 8 : 14);
+      }
+      if (cinematic.applauseTimer <= 0) {
+        cinematic.applauseTimer = 0.72;
+        this.sound.play("applause");
+      }
+      if (cinematic.winner === "player" && cinematic.crowdTimer <= 0) {
+        cinematic.crowdTimer = 1.15;
+        this.sound.play("crowd");
+      }
+    }
+
+    spawnConfetti(fighter, count) {
+      const colors = [0xffd166, 0x7df9ff, 0xff6b4a, 0xffffff, 0x56d6a6];
+      const originX = fighter ? fighter.x : ARENA_WIDTH / 2;
+      const originZ = fighter ? fighter.z : 0;
+      for (let i = 0; i < count; i++) {
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const life = 1.4 + Math.random() * 1.2;
+        const mesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.045 + Math.random() * 0.035, 0.095 + Math.random() * 0.045),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false })
+        );
+        this.effectGroup.add(mesh);
+        this.effects.push({
+          x: originX + (Math.random() - 0.5) * 360,
+          y: -210 - Math.random() * 80,
+          z: originZ + (Math.random() - 0.5) * 210,
+          vx: (Math.random() - 0.5) * 1.7,
+          vy: 0.65 + Math.random() * 0.8,
+          vz: (Math.random() - 0.5) * 1.7,
+          life,
+          maxLife: life,
+          spin: (Math.random() - 0.5) * 12,
+          baseOpacity: 0.95,
+          mesh
+        });
+      }
+    }
+
     showBanner(text, seconds) {
       this.banner = text;
       this.bannerTimer = seconds;
@@ -996,6 +1140,7 @@
       this.cpu.losePose = winner === "player";
       this.showBanner(winner === "draw" ? "DRAW" : winner === "player" ? "ROUND WIN" : "ROUND LOST", 1.2);
       this.sound.play(winner === "player" ? "win" : "lose");
+      this.startVictoryCinematic(winner);
       window.setTimeout(() => {
         if (this.playerRounds >= 2 || this.cpuRounds >= 2) {
           this.matchFinished = true;
@@ -1010,7 +1155,7 @@
         }
         this.roundNumber += 1;
         this.startRound();
-      }, 1200);
+      }, 3200);
     }
 
     draw() {
@@ -1178,7 +1323,54 @@
       if (fighter.state === "down") rig.group.rotation.z = fighter.facing * 1.1;
       else rig.group.rotation.z = 0;
 
+      this.syncVictoryPose(rig, fighter, time);
       this.syncAttackCue(rig, fighter);
+    }
+
+    syncVictoryPose(rig, fighter, time) {
+      const cinematic = this.victoryCinematic;
+      if (!cinematic) return;
+      const pulse = Math.sin(time / 160);
+      if (fighter === cinematic.winnerFighter) {
+        rig.group.rotation.z = pulse * 0.04;
+        rig.group.scale.setScalar(1.12 + Math.max(0, pulse) * 0.03);
+        rig.body.rotation.x = -0.08;
+        rig.head.position.y += 0.08;
+        rig.armL.position.set(-0.44, 1.28, 0.1);
+        rig.armR.position.set(0.44, 1.28, 0.1);
+        rig.armL.rotation.set(-0.34, 0, 1.95 + pulse * 0.12);
+        rig.armR.rotation.set(-0.34, 0, -1.95 - pulse * 0.12);
+        rig.handL.position.set(-0.68, 1.74 + pulse * 0.04, 0.12);
+        rig.handR.position.set(0.68, 1.74 + pulse * 0.04, 0.12);
+        rig.handL.rotation.copy(rig.armL.rotation);
+        rig.handR.rotation.copy(rig.armR.rotation);
+        return;
+      }
+      if (fighter !== cinematic.loserFighter) return;
+      rig.group.rotation.z = 0;
+      rig.group.scale.setScalar(0.98);
+      if (cinematic.winner === "player") {
+        const clap = Math.abs(Math.sin(time / 95));
+        rig.body.rotation.x = 0.12;
+        rig.head.position.y -= 0.08;
+        rig.armL.position.set(-0.2 - clap * 0.1, 1.08, 0.36);
+        rig.armR.position.set(0.2 + clap * 0.1, 1.08, 0.36);
+        rig.armL.rotation.set(Math.PI / 2, 0, 0.5);
+        rig.armR.rotation.set(Math.PI / 2, 0, -0.5);
+        rig.handL.position.set(-0.05 - clap * 0.12, 0.92, 0.74);
+        rig.handR.position.set(0.05 + clap * 0.12, 0.92, 0.74);
+      } else {
+        rig.body.rotation.x = 0.34;
+        rig.head.position.y -= 0.16;
+        rig.armL.position.set(-0.46, 0.94 + pulse * 0.03, 0.12);
+        rig.armR.position.set(0.46, 0.94 - pulse * 0.03, 0.12);
+        rig.armL.rotation.set(0.2, 0, 0.9);
+        rig.armR.rotation.set(0.2, 0, -0.9);
+        rig.handL.position.set(-0.54, 0.56, 0.22);
+        rig.handR.position.set(0.54, 0.56, 0.22);
+      }
+      rig.handL.rotation.copy(rig.armL.rotation);
+      rig.handR.rotation.copy(rig.armR.rotation);
     }
 
     syncAttackCue(rig, fighter) {
@@ -1283,6 +1475,23 @@
           .add(lateral)
           .add(new THREE.Vector3(shake, height + ease * 0.22, shake));
         this.camera.lookAt(fighterWorld.clone().add(new THREE.Vector3(0, 0.38 + ease * 0.2, 0)));
+        return;
+      }
+      if (this.victoryCinematic && this.victoryCinematic.winnerFighter) {
+        const { winnerFighter, timer, duration } = this.victoryCinematic;
+        const progress = 1 - Math.max(0, timer / duration);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const fighterWorld = this.toWorld(winnerFighter.x, winnerFighter.y - 80, winnerFighter.z);
+        const forward = new THREE.Vector3(winnerFighter.forwardX || winnerFighter.facing || 1, 0, winnerFighter.forwardZ || 0).normalize();
+        const lateral = new THREE.Vector3(forward.z, 0, -forward.x).multiplyScalar(winnerFighter === this.player ? -0.85 : 0.85);
+        const distance = 4.6 - ease * 1.65;
+        const height = 1.35 + Math.sin(progress * Math.PI) * 0.36;
+        const orbit = Math.sin(progress * Math.PI * 0.9) * 0.55;
+        this.camera.position.copy(fighterWorld)
+          .add(forward.clone().multiplyScalar(-distance))
+          .add(lateral)
+          .add(new THREE.Vector3(Math.sin(orbit) * 0.5, height, Math.cos(orbit) * 0.22));
+        this.camera.lookAt(fighterWorld.clone().add(new THREE.Vector3(0, 0.78, 0)));
         return;
       }
       const midX = ((this.player.x + this.cpu.x) / 2 - ARENA_WIDTH / 2) / 75;
