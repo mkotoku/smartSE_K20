@@ -1244,6 +1244,7 @@
       const walk = fighter.state === "walk" ? Math.sin(time / 80) : 0;
       const isCrouch = fighter.crouching || fighter.state === "crouchLight" || fighter.state === "crouchHeavy";
       const crouch = isCrouch ? -0.36 : fighter.state === "guard" ? -0.12 : 0;
+      [rig.armL, rig.armR, rig.handL, rig.handR, rig.legL, rig.legR, rig.bootL, rig.bootR].forEach((part) => part.scale.set(1, 1, 1));
       rig.body.position.set(0, 0.88 + crouch, 0);
       rig.body.scale.y = isCrouch ? 0.72 : 1;
       rig.head.position.set(0, 1.46 + crouch + Math.sin(time / 260) * 0.02, 0);
@@ -1259,28 +1260,21 @@
       rig.mouth.position.set(0, rig.head.position.y - 0.12, 0.258);
       rig.belt.position.set(0, 0.56 + crouch * 0.35, 0);
       rig.sash.position.set(0.12, 0.56 + crouch * 0.35, 0.01);
-      rig.armL.position.set(-0.34, 0.94 + crouch, 0);
-      rig.armR.position.set(0.34, 0.94 + crouch, 0);
       rig.shoulderL.position.set(-0.36, 1.2 + crouch, 0);
       rig.shoulderR.position.set(0.36, 1.2 + crouch, 0);
-      rig.handL.position.set(-0.34, 0.54 + crouch, 0.02);
-      rig.handR.position.set(0.34, 0.54 + crouch, 0.02);
-      rig.legL.position.set(-0.16, 0.32, 0.05);
-      rig.legR.position.set(0.16, 0.32, -0.05);
-      rig.bootL.position.set(-0.16, 0.02, 0.08);
-      rig.bootR.position.set(0.16, 0.02, -0.02);
-      rig.armL.rotation.z = 0.45;
-      rig.armR.rotation.z = -0.45;
-      rig.armL.rotation.x = 0;
-      rig.armL.rotation.y = 0;
-      rig.armR.rotation.x = 0;
-      rig.armR.rotation.y = 0;
+      const armSwing = walk * 0.08;
+      this.setVoxelLimb(rig.armL, { x: -0.38, y: 1.12 + crouch, z: 0 }, { x: -0.42, y: 0.68 + crouch - armSwing, z: 0.02 }, 0.66);
+      this.setVoxelLimb(rig.armR, { x: 0.38, y: 1.12 + crouch, z: 0 }, { x: 0.42, y: 0.68 + crouch + armSwing, z: 0.02 }, 0.66);
+      rig.handL.position.set(-0.42, 0.58 + crouch - armSwing, 0.02);
+      rig.handR.position.set(0.42, 0.58 + crouch + armSwing, 0.02);
+      this.setVoxelLimb(rig.legL, { x: -0.17, y: 0.54 + crouch * 0.2, z: 0.04 }, { x: -0.2, y: 0.14, z: 0.07 }, 0.64);
+      this.setVoxelLimb(rig.legR, { x: 0.17, y: 0.54 + crouch * 0.2, z: -0.04 }, { x: 0.2, y: 0.14, z: -0.02 }, 0.64);
+      rig.bootL.position.set(-0.2, 0.03, 0.1);
+      rig.bootR.position.set(0.2, 0.03, 0.01);
       rig.shoulderL.rotation.copy(rig.armL.rotation);
       rig.shoulderR.rotation.copy(rig.armR.rotation);
       rig.handL.rotation.copy(rig.armL.rotation);
       rig.handR.rotation.copy(rig.armR.rotation);
-      rig.legL.rotation.z = walk * 0.35;
-      rig.legR.rotation.z = -walk * 0.35;
       rig.bootL.rotation.copy(rig.legL.rotation);
       rig.bootR.rotation.copy(rig.legR.rotation);
       if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "tornado" || fighter.state === "super") {
@@ -1373,10 +1367,12 @@
         rig.group.scale.setScalar(1.12 + Math.max(0, pulse) * 0.03);
         rig.body.rotation.x = -0.08;
         rig.head.position.y += 0.08;
-        rig.armL.position.set(-0.44, 1.28, 0.1);
-        rig.armR.position.set(0.44, 1.28, 0.1);
-        rig.armL.rotation.set(-0.34, 0, 1.95 + pulse * 0.12);
-        rig.armR.rotation.set(-0.34, 0, -1.95 - pulse * 0.12);
+        this.setVoxelLimb(rig.armL, { x: -0.38, y: 1.24, z: 0.1 }, { x: -0.68, y: 1.72 + pulse * 0.04, z: 0.12 }, 0.66);
+        this.setVoxelLimb(rig.armR, { x: 0.38, y: 1.24, z: 0.1 }, { x: 0.68, y: 1.72 + pulse * 0.04, z: 0.12 }, 0.66);
+        rig.shoulderL.position.set(-0.38, 1.24, 0.08);
+        rig.shoulderR.position.set(0.38, 1.24, 0.08);
+        rig.shoulderL.rotation.copy(rig.armL.rotation);
+        rig.shoulderR.rotation.copy(rig.armR.rotation);
         rig.handL.position.set(-0.68, 1.74 + pulse * 0.04, 0.12);
         rig.handR.position.set(0.68, 1.74 + pulse * 0.04, 0.12);
         rig.handL.rotation.copy(rig.armL.rotation);
@@ -1389,14 +1385,25 @@
       const clap = Math.abs(Math.sin(time / 95));
       rig.body.rotation.x = 0.12;
       rig.head.position.y -= 0.08;
-      rig.armL.position.set(-0.2 - clap * 0.1, 1.08, 0.36);
-      rig.armR.position.set(0.2 + clap * 0.1, 1.08, 0.36);
-      rig.armL.rotation.set(Math.PI / 2, 0, 0.5);
-      rig.armR.rotation.set(Math.PI / 2, 0, -0.5);
-      rig.handL.position.set(-0.05 - clap * 0.12, 0.92, 0.74);
-      rig.handR.position.set(0.05 + clap * 0.12, 0.92, 0.74);
+      this.setVoxelLimb(rig.armL, { x: -0.36, y: 1.12, z: 0.08 }, { x: -0.06 - clap * 0.09, y: 0.94, z: 0.58 }, 0.66);
+      this.setVoxelLimb(rig.armR, { x: 0.36, y: 1.12, z: 0.08 }, { x: 0.06 + clap * 0.09, y: 0.94, z: 0.58 }, 0.66);
+      rig.shoulderL.position.set(-0.36, 1.12, 0.08);
+      rig.shoulderR.position.set(0.36, 1.12, 0.08);
+      rig.shoulderL.rotation.copy(rig.armL.rotation);
+      rig.shoulderR.rotation.copy(rig.armR.rotation);
+      rig.handL.position.set(-0.05 - clap * 0.12, 0.92, 0.69);
+      rig.handR.position.set(0.05 + clap * 0.12, 0.92, 0.69);
       rig.handL.rotation.copy(rig.armL.rotation);
       rig.handR.rotation.copy(rig.armR.rotation);
+    }
+
+    setVoxelLimb(part, start, end, baseLength) {
+      const direction = new THREE.Vector3(end.x - start.x, end.y - start.y, end.z - start.z);
+      const length = Math.max(0.001, direction.length());
+      part.position.set((start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2);
+      direction.normalize();
+      part.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+      part.scale.set(1, length / baseLength, 1);
     }
 
     syncAttackCue(rig, fighter) {
