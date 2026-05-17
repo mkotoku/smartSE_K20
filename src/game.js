@@ -1045,6 +1045,7 @@
     startVictoryCinematic(winner) {
       const winnerFighter = winner === "player" ? this.player : winner === "cpu" ? this.cpu : null;
       const loserFighter = winner === "player" ? this.cpu : winner === "cpu" ? this.player : null;
+      if (winnerFighter && loserFighter) this.arrangeMatchVictoryScene(winnerFighter, loserFighter);
       this.victoryCinematic = {
         winner,
         winnerFighter,
@@ -1063,6 +1064,41 @@
         this.sound.play("applause");
       }
       this.spawnConfetti(winnerFighter || this.player, winner === "draw" ? 30 : 52);
+    }
+
+    arrangeMatchVictoryScene(winnerFighter, loserFighter) {
+      const centerX = ARENA_WIDTH / 2;
+      winnerFighter.x = centerX;
+      winnerFighter.y = 0;
+      winnerFighter.z = -28;
+      winnerFighter.vx = 0;
+      winnerFighter.vy = 0;
+      winnerFighter.vz = 0;
+      winnerFighter.onGround = true;
+      winnerFighter.forwardX = 0;
+      winnerFighter.forwardZ = -1;
+      winnerFighter.facing = 1;
+      winnerFighter.yaw = Math.PI;
+      winnerFighter.attack = null;
+      winnerFighter.hitStun = 0;
+      winnerFighter.crouching = false;
+      winnerFighter.guard = false;
+
+      loserFighter.x = centerX + 118;
+      loserFighter.y = 0;
+      loserFighter.z = 78;
+      loserFighter.vx = 0;
+      loserFighter.vy = 0;
+      loserFighter.vz = 0;
+      loserFighter.onGround = true;
+      loserFighter.forwardX = 0;
+      loserFighter.forwardZ = -1;
+      loserFighter.facing = 1;
+      loserFighter.yaw = Math.PI;
+      loserFighter.attack = null;
+      loserFighter.hitStun = 0;
+      loserFighter.crouching = false;
+      loserFighter.guard = false;
     }
 
     updateVictoryCinematic(dt) {
@@ -1134,15 +1170,16 @@
       this.finished = true;
       if (winner === "player") this.playerRounds += 1;
       if (winner === "cpu") this.cpuRounds += 1;
+      const matchWon = this.playerRounds >= 2 || this.cpuRounds >= 2;
       this.player.winPose = winner === "player";
       this.player.losePose = winner === "cpu";
       this.cpu.winPose = winner === "cpu";
       this.cpu.losePose = winner === "player";
-      this.showBanner(winner === "draw" ? "DRAW" : winner === "player" ? "ROUND WIN" : "ROUND LOST", 1.2);
+      this.showBanner(winner === "draw" ? "DRAW" : winner === "player" ? matchWon ? "MATCH WIN" : "ROUND WIN" : matchWon ? "MATCH LOST" : "ROUND LOST", 1.2);
       this.sound.play(winner === "player" ? "win" : "lose");
-      this.startVictoryCinematic(winner);
+      if (matchWon) this.startVictoryCinematic(winner);
       window.setTimeout(() => {
-        if (this.playerRounds >= 2 || this.cpuRounds >= 2) {
+        if (matchWon) {
           this.matchFinished = true;
           this.lastResult = this.playerRounds > this.cpuRounds ? "win" : "lose";
           if (this.onRoundEnd) {
@@ -1155,7 +1192,7 @@
         }
         this.roundNumber += 1;
         this.startRound();
-      }, 3200);
+      }, matchWon ? 3200 : 1200);
     }
 
     draw() {
@@ -1349,26 +1386,15 @@
       if (fighter !== cinematic.loserFighter) return;
       rig.group.rotation.z = 0;
       rig.group.scale.setScalar(0.98);
-      if (cinematic.winner === "player") {
-        const clap = Math.abs(Math.sin(time / 95));
-        rig.body.rotation.x = 0.12;
-        rig.head.position.y -= 0.08;
-        rig.armL.position.set(-0.2 - clap * 0.1, 1.08, 0.36);
-        rig.armR.position.set(0.2 + clap * 0.1, 1.08, 0.36);
-        rig.armL.rotation.set(Math.PI / 2, 0, 0.5);
-        rig.armR.rotation.set(Math.PI / 2, 0, -0.5);
-        rig.handL.position.set(-0.05 - clap * 0.12, 0.92, 0.74);
-        rig.handR.position.set(0.05 + clap * 0.12, 0.92, 0.74);
-      } else {
-        rig.body.rotation.x = 0.34;
-        rig.head.position.y -= 0.16;
-        rig.armL.position.set(-0.46, 0.94 + pulse * 0.03, 0.12);
-        rig.armR.position.set(0.46, 0.94 - pulse * 0.03, 0.12);
-        rig.armL.rotation.set(0.2, 0, 0.9);
-        rig.armR.rotation.set(0.2, 0, -0.9);
-        rig.handL.position.set(-0.54, 0.56, 0.22);
-        rig.handR.position.set(0.54, 0.56, 0.22);
-      }
+      const clap = Math.abs(Math.sin(time / 95));
+      rig.body.rotation.x = 0.12;
+      rig.head.position.y -= 0.08;
+      rig.armL.position.set(-0.2 - clap * 0.1, 1.08, 0.36);
+      rig.armR.position.set(0.2 + clap * 0.1, 1.08, 0.36);
+      rig.armL.rotation.set(Math.PI / 2, 0, 0.5);
+      rig.armR.rotation.set(Math.PI / 2, 0, -0.5);
+      rig.handL.position.set(-0.05 - clap * 0.12, 0.92, 0.74);
+      rig.handR.position.set(0.05 + clap * 0.12, 0.92, 0.74);
       rig.handL.rotation.copy(rig.armL.rotation);
       rig.handR.rotation.copy(rig.armR.rotation);
     }
@@ -1481,17 +1507,14 @@
         const { winnerFighter, timer, duration } = this.victoryCinematic;
         const progress = 1 - Math.max(0, timer / duration);
         const ease = 1 - Math.pow(1 - progress, 3);
-        const fighterWorld = this.toWorld(winnerFighter.x, winnerFighter.y - 80, winnerFighter.z);
-        const forward = new THREE.Vector3(winnerFighter.forwardX || winnerFighter.facing || 1, 0, winnerFighter.forwardZ || 0).normalize();
-        const lateral = new THREE.Vector3(forward.z, 0, -forward.x).multiplyScalar(winnerFighter === this.player ? -0.85 : 0.85);
-        const distance = 4.6 - ease * 1.65;
-        const height = 1.35 + Math.sin(progress * Math.PI) * 0.36;
-        const orbit = Math.sin(progress * Math.PI * 0.9) * 0.55;
+        const fighterWorld = this.toWorld(winnerFighter.x, winnerFighter.y - 96, winnerFighter.z);
+        const forward = new THREE.Vector3(winnerFighter.forwardX || 0, 0, winnerFighter.forwardZ || -1).normalize();
+        const distance = 3.25 - ease * 1.05;
+        const height = 0.42 + Math.sin(progress * Math.PI) * 0.24;
         this.camera.position.copy(fighterWorld)
-          .add(forward.clone().multiplyScalar(-distance))
-          .add(lateral)
-          .add(new THREE.Vector3(Math.sin(orbit) * 0.5, height, Math.cos(orbit) * 0.22));
-        this.camera.lookAt(fighterWorld.clone().add(new THREE.Vector3(0, 0.78, 0)));
+          .add(forward.clone().multiplyScalar(distance))
+          .add(new THREE.Vector3(0, height, 0));
+        this.camera.lookAt(fighterWorld.clone().add(new THREE.Vector3(0, 0.82, 0)));
         return;
       }
       const midX = ((this.player.x + this.cpu.x) / 2 - ARENA_WIDTH / 2) / 75;
