@@ -433,20 +433,31 @@
       );
       const sword = new THREE.Group();
       const blade = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 1.28, 0.06),
+        new THREE.BoxGeometry(0.34, 1.88, 0.1),
         new THREE.MeshStandardMaterial({ color: 0xd8f2ff, emissive: 0x4b8fb8, emissiveIntensity: 0.24, roughness: 0.28, metalness: 0.55 })
       );
+      const bladeTip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.24, 0.34, 4),
+        new THREE.MeshStandardMaterial({ color: 0xf4fbff, emissive: 0x4b8fb8, emissiveIntensity: 0.28, roughness: 0.24, metalness: 0.58 })
+      );
+      const bladeSpine = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 1.72, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x7fa4b8, emissive: 0x1e4f65, emissiveIntensity: 0.18, roughness: 0.32, metalness: 0.48 })
+      );
       const guard = new THREE.Mesh(
-        new THREE.BoxGeometry(0.48, 0.08, 0.12),
+        new THREE.BoxGeometry(0.62, 0.1, 0.16),
         new THREE.MeshStandardMaterial({ color: 0x202838, emissive: 0x0c1422, roughness: 0.38, metalness: 0.4 })
       );
       const grip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, 0.36, 0.1),
+        new THREE.BoxGeometry(0.12, 0.42, 0.12),
         new THREE.MeshStandardMaterial({ color: 0x151a22, roughness: 0.55, metalness: 0.22 })
       );
-      blade.position.y = 0.48;
-      grip.position.y = -0.34;
-      sword.add(blade, guard, grip);
+      blade.position.y = 0.72;
+      bladeTip.position.y = 1.83;
+      bladeTip.rotation.y = Math.PI / 4;
+      bladeSpine.position.set(-0.13, 0.68, 0.012);
+      grip.position.y = -0.42;
+      sword.add(blade, bladeTip, bladeSpine, guard, grip);
       sword.visible = false;
       const labelCanvas = document.createElement("canvas");
       labelCanvas.width = 256;
@@ -478,7 +489,7 @@
       return {
         group, body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
         armL, armR, shoulderL, shoulderR, handL, handR, legL, legR, bootL, bootR, belt, sash,
-        sword, blade, guard, grip, attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture
+        sword, blade, bladeTip, bladeSpine, guard, grip, attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture
       };
     }
 
@@ -787,6 +798,7 @@
         this.startSpecialCinematic(fighter, type);
         if (type === "bladeWave") this.spawnBladeWaveFlare(fighter);
         else this.spawnSpecialFlare(fighter, type);
+        if (type === "bladeDive") this.spawnBladeDiveFlare(fighter);
         if (type !== "tornado" && type !== "bladeDive" && type !== "shoryuken" && type !== "dragonDance") this.spawnWave(fighter, type);
         this.slowMotion = Math.max(this.slowMotion, type === "super" ? 0.42 : 0.22);
         this.shake = Math.max(this.shake, type === "super" ? 13 : 7);
@@ -917,6 +929,54 @@
           life: 0.18 + Math.random() * 0.18,
           maxLife: 0.3,
           mesh: spark
+        });
+      }
+    }
+
+    spawnBladeDiveFlare(fighter) {
+      const color = 0xd8f2ff;
+      const baseX = fighter.x + fighter.forwardX * 42;
+      const baseZ = fighter.z + fighter.forwardZ * 42;
+      for (let i = 0; i < 8; i++) {
+        const trail = new THREE.Mesh(
+          new THREE.BoxGeometry(0.055, 0.035, 0.92 + i * 0.08),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : color, transparent: true, opacity: 0.86, depthWrite: false })
+        );
+        trail.rotation.y = fighter.yaw;
+        trail.rotation.x = -0.65 + i * 0.1;
+        trail.rotation.z = -0.42 + i * 0.12;
+        this.effectGroup.add(trail);
+        this.effects.push({
+          x: baseX + fighter.forwardX * (i * 8),
+          y: fighter.y - 158 + i * 14,
+          z: baseZ + fighter.forwardZ * (i * 8),
+          vx: fighter.forwardX * 1.6,
+          vy: 3.5 + i * 0.16,
+          vz: fighter.forwardZ * 1.6,
+          life: 0.2 + i * 0.025,
+          maxLife: 0.38,
+          grow: 0.9,
+          mesh: trail
+        });
+      }
+      for (let i = 0; i < 3; i++) {
+        const crescent = new THREE.Mesh(
+          new THREE.TorusGeometry(0.42 + i * 0.18, 0.018, 6, 52, Math.PI * 1.18),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.78, depthWrite: false })
+        );
+        crescent.rotation.set(Math.PI / 2, 0, fighter.yaw + Math.PI / 2);
+        this.effectGroup.add(crescent);
+        this.effects.push({
+          x: baseX + fighter.forwardX * 58,
+          y: fighter.y - 12,
+          z: baseZ + fighter.forwardZ * 58,
+          vx: fighter.forwardX * 1.8,
+          vy: -0.1,
+          vz: fighter.forwardZ * 1.8,
+          life: 0.28 + i * 0.05,
+          maxLife: 0.38,
+          grow: 1.1,
+          mesh: crescent
         });
       }
     }
@@ -1331,6 +1391,8 @@
       rig.sword.visible = fighter.style === "sword";
       if (rig.sword.visible) {
         rig.blade.material.color.copy(new THREE.Color(fighter.flash > 0 ? "#ffffff" : fighter.accent));
+        rig.bladeTip.material.color.copy(new THREE.Color(fighter.flash > 0 ? "#ffffff" : "#f4fbff"));
+        rig.bladeSpine.material.color.copy(new THREE.Color(fighter.flash > 0 ? "#ffffff" : "#7fa4b8"));
         rig.guard.material.color.copy(dark);
         rig.grip.material.color.copy(dark);
       }
@@ -1404,9 +1466,15 @@
             rig.legR.rotation.x = 0.48 + charge * 0.28;
           }
           if (fighter.state === "bladeDive") {
-            rig.group.rotation.y += Math.sin(progress * Math.PI) * 0.46;
-            rig.body.rotation.x = -0.5 + charge * 0.45;
-            rig.handR.position.set(0.08, 1.62 - charge * 0.46, 0.64);
+            const windup = Math.min(1, progress / 0.34);
+            const chop = Math.max(0, Math.min(1, (progress - 0.34) / 0.34));
+            rig.group.rotation.y += Math.sin(progress * Math.PI) * 0.58;
+            rig.body.rotation.x = -0.36 - windup * 0.36 + chop * 0.92;
+            rig.head.position.y += windup * 0.12;
+            rig.handR.position.set(0.08, 1.72 - chop * 0.74, 0.62 + chop * 0.34);
+            rig.handL.position.set(-0.1, 1.58 - chop * 0.58, 0.54 + chop * 0.3);
+            rig.legL.rotation.x = -0.42 - windup * 0.3;
+            rig.legR.rotation.x = 0.58 + chop * 0.36;
           }
           if (fighter.state === "tornado") {
             const spin = progress * Math.PI * 8;
@@ -1472,27 +1540,40 @@
       const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
       const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 0;
       const swing = Math.sin(progress * Math.PI);
-      rig.sword.position.set(0.42, 0.95, 0.08);
-      rig.sword.rotation.set(-0.72, 0.2, -0.82);
-      rig.sword.scale.setScalar(1);
+      rig.sword.position.set(0.44, 0.9, 0.05);
+      rig.sword.rotation.set(-0.82, 0.24, -0.72);
+      rig.sword.scale.set(1.05, 1.08, 1.05);
       if (fighter.state === "walk") {
         rig.sword.rotation.z += Math.sin(time / 80) * 0.08;
       }
       if (fighter.state === "bladeLight") {
-        rig.sword.position.set(0.58, 1.06, 0.62 + swing * 0.22);
-        rig.sword.rotation.set(1.22 - swing * 1.4, -0.35 + swing * 1.2, -1.15 + swing * 2.1);
+        rig.sword.position.set(0.6, 1.08, 0.66 + swing * 0.24);
+        rig.sword.rotation.set(1.18 - swing * 1.48, -0.35 + swing * 1.24, -1.12 + swing * 2.24);
       } else if (fighter.state === "bladeHeavy") {
-        rig.sword.position.set(0.48, 1.22, 0.58 + swing * 0.36);
-        rig.sword.rotation.set(1.62 - swing * 2.2, -0.72 + swing * 1.6, -1.85 + swing * 3.2);
-        rig.sword.scale.set(1.08, 1.12, 1);
+        rig.sword.position.set(0.5, 1.24, 0.62 + swing * 0.38);
+        rig.sword.rotation.set(1.66 - swing * 2.28, -0.72 + swing * 1.7, -1.85 + swing * 3.35);
+        rig.sword.scale.set(1.14, 1.2, 1.08);
       } else if (fighter.state === "bladeWave") {
         rig.sword.position.set(0.4, 1.2 + swing * 0.06, 0.72 + swing * 0.34);
         rig.sword.rotation.set(Math.PI / 2 - swing * 0.8, 0.08, -0.28 + swing * 0.72);
-        rig.sword.scale.set(1.06, 1.18, 1);
+        rig.sword.scale.set(1.12, 1.22, 1.08);
       } else if (fighter.state === "bladeDive") {
-        rig.sword.position.set(0.18, 1.64 - swing * 0.5, 0.66);
-        rig.sword.rotation.set(-0.2 + swing * 2.4, 0.08, -0.12);
-        rig.sword.scale.set(1.12, 1.22, 1);
+        const windup = Math.min(1, progress / 0.34);
+        const chop = Math.max(0, Math.min(1, (progress - 0.34) / 0.3));
+        const follow = Math.max(0, Math.min(1, (progress - 0.64) / 0.28));
+        const anticipation = Math.sin(windup * Math.PI / 2);
+        const slam = 1 - Math.pow(1 - chop, 3);
+        rig.sword.position.set(
+          0.18 + anticipation * 0.08 - slam * 0.2,
+          1.36 + anticipation * 0.74 - slam * 1.02 + follow * 0.24,
+          0.32 + anticipation * 0.2 + slam * 0.88
+        );
+        rig.sword.rotation.set(
+          -1.02 + anticipation * 2.75 + slam * 2.95 - follow * 0.52,
+          0.08 + anticipation * 0.12 - slam * 0.08,
+          -0.18 - anticipation * 0.38 + slam * 0.18
+        );
+        rig.sword.scale.set(1.22 + slam * 0.16, 1.38 + slam * 0.22, 1.14);
       } else if (fighter.state === "super") {
         rig.sword.position.set(0.5, 1.18, 0.58 + swing * 0.28);
         rig.sword.rotation.set(Math.PI / 2, 0.2, -0.62 + swing);
