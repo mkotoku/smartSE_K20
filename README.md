@@ -33,6 +33,7 @@ file:///C:/Users/waseda/Desktop/work/K20/ex10/index.html
 
 | 操作 | キー |
 | --- | --- |
+| Uppercut / Dragon Dance | `U` |
 | 左右移動 | `A` / `D` |
 | 奥行き移動 | `Q` / `E` |
 | ジャンプ | `W` |

@@ -24,6 +24,7 @@
         guard: "KeyS",
         light: "KeyJ",
         heavy: "KeyK",
+        uppercut: "KeyU",
         tornado: "KeyI",
         special: "KeyL",
         camera: "KeyC",

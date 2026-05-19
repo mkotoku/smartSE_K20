@@ -52,6 +52,52 @@
       sound: "hitSpecial",
       spark: "#7df9ff"
     },
+    shoryuken: {
+      name: "shoryuken",
+      label: "Rising Dragon",
+      level: "rising",
+      damage: 16,
+      meterGain: 14,
+      startup: 0.08,
+      active: 0.24,
+      recovery: 0.36,
+      range: 72,
+      height: 96,
+      depth: 82,
+      knockback: 360,
+      verticalKnockback: -760,
+      selfLift: -720,
+      hitStun: 0.46,
+      knockdown: 0.75,
+      cancelWindow: 0,
+      sound: "hitSpecial",
+      spark: "#ff8a2a"
+    },
+    dragonDance: {
+      name: "dragonDance",
+      label: "Dragon Dance",
+      level: "rising",
+      damage: 7,
+      meterGain: 7,
+      meterCost: 20,
+      startup: 0.04,
+      active: 0.62,
+      recovery: 0.38,
+      range: 86,
+      height: 112,
+      depth: 104,
+      knockback: 210,
+      verticalKnockback: -820,
+      selfLift: -620,
+      hitStun: 0.32,
+      knockdown: 0.95,
+      cancelWindow: 0,
+      sound: "hitSpecial",
+      spark: "#ffb347",
+      multiHit: true,
+      maxHits: 4,
+      hitInterval: 0.15
+    },
     tornado: {
       name: "tornado",
       label: "Tornado Kick",
@@ -181,6 +227,7 @@
       this.attackHitCount = 0;
       this.attackHitCooldown = 0;
       this.hitStun = 0;
+      this.knockdown = 0;
       this.guard = false;
       this.crouching = false;
       this.onGround = true;
@@ -204,15 +251,21 @@
     }
 
     canAct() {
-      return this.hitStun <= 0 && !this.losePose;
+      return this.hitStun <= 0 && this.knockdown <= 0 && !this.losePose;
     }
 
     canCancelInto(type) {
       if (!this.attack || this.hitStun > 0) return false;
       if (this.attack.name === "super") return false;
+      if (type === "dragonDance" && this.attack.name === "shoryuken") {
+        return this.attackTimer >= this.attack.startup;
+      }
       if (this.attackTimer < this.attack.startup + this.attack.active) return false;
       const chain = this.comboChain.join(",");
-      return (type === "heavy" && chain.endsWith("light")) || (type === "special" && /light,heavy$/.test(chain)) || type === "super";
+      return (type === "heavy" && chain.endsWith("light")) ||
+        (type === "special" && /light,heavy$/.test(chain)) ||
+        (type === "dragonDance" && chain.endsWith("shoryuken")) ||
+        type === "super";
     }
 
     startAttack(type) {
@@ -238,6 +291,7 @@
       if (this.comboTimer <= 0 && !this.attack) this.comboChain = [];
 
       if (this.hitStun > 0) this.hitStun = Math.max(0, this.hitStun - dt);
+      if (this.knockdown > 0) this.knockdown = Math.max(0, this.knockdown - dt);
 
       if (this.attack) {
         this.attackTimer += dt;
@@ -246,6 +300,12 @@
           this.vx = this.forwardX * this.attack.moveSpeed;
           this.vz = this.forwardZ * this.attack.moveSpeed;
           this.vy = Math.min(this.vy, -80);
+        } else if (this.attack.name === "shoryuken" || this.attack.name === "dragonDance") {
+          const lift = this.attack.selfLift || -620;
+          const spiral = this.attack.name === "dragonDance" ? Math.sin(this.attackTimer * 30) * 120 : 0;
+          this.vx = this.forwardX * (this.attack.name === "dragonDance" ? 210 : 130);
+          this.vz = this.forwardZ * (this.attack.name === "dragonDance" ? 210 : 130) + spiral;
+          this.vy = Math.min(this.vy, lift);
         }
         const total = this.attack.startup + this.attack.active + this.attack.recovery;
         if (this.attackTimer >= total) {
@@ -278,7 +338,7 @@
 
       for (const ghost of this.afterImages) ghost.life -= dt;
       this.afterImages = this.afterImages.filter((ghost) => ghost.life > 0);
-      if (this.attack && (this.attack.name === "special" || this.attack.name === "tornado" || this.attack.name === "super")) {
+      if (this.attack && (this.attack.name === "special" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super")) {
         this.afterImages.push({ x: this.x, y: this.y, facing: this.facing, life: 0.18, state: this.state });
         this.afterImages = this.afterImages.slice(-8);
       }
@@ -286,6 +346,7 @@
       if (!this.attack && this.hitStun <= 0) {
         if (this.winPose) this.state = "win";
         else if (this.losePose) this.state = "down";
+        else if (this.knockdown > 0) this.state = "down";
         else if (!this.onGround) this.state = "jump";
         else if (this.guard) this.state = "guard";
         else if (Math.abs(this.vx) > 20) this.state = "walk";
@@ -320,10 +381,12 @@
       this.hp = Math.max(0, this.hp - damage);
       this.meter = Math.min(100, this.meter + (blocked ? 5 : 8));
       this.vx = direction * (blocked ? attack.knockback * 0.28 : attack.knockback);
-      if (!blocked && attack.name !== "light") this.vy = Math.min(this.vy, -120);
+      if (!blocked && attack.verticalKnockback) this.vy = Math.min(this.vy, attack.verticalKnockback);
+      else if (!blocked && attack.name !== "light") this.vy = Math.min(this.vy, -120);
       this.hitStun = blocked ? 0.1 : attack.hitStun;
+      this.knockdown = !blocked && attack.knockdown ? attack.knockdown : 0;
       this.flash = blocked ? 0.08 : 0.16;
-      if (!blocked) this.state = "hurt";
+      if (!blocked) this.state = attack.knockdown ? "down" : "hurt";
       return damage;
     }
 
@@ -387,6 +450,10 @@
       if (this.state === "light") frontArm = [23, chestY + 10, 58, chestY + 9, 82, chestY + 14];
       if (this.state === "heavy") frontArm = [23, chestY + 12, 60, chestY - 6, 94, chestY + 6];
       if (this.state === "special" || this.state === "super") frontArm = [23, chestY + 8, 66, chestY - 6, 108, chestY + 4];
+      if (this.state === "shoryuken" || this.state === "dragonDance") {
+        frontArm = [18, chestY + 4, 32, chestY - 34, 28, chestY - 72];
+        backArm = [-22, chestY + 12, -40, chestY - 4, -50, chestY + 20];
+      }
       if (this.state === "tornado") {
         frontArm = [23, chestY + 4, 46, chestY - 16, 72, chestY - 2];
         backArm = [-22, chestY + 10, -44, chestY - 8, -68, chestY + 4];
@@ -416,7 +483,7 @@
       const box = this.attackBox();
       if (box && !ghost) {
         const pulse = this.attack.name === "super" ? 0.65 : 0.38;
-        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "tornado" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
+        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
         ctx.beginPath();
         ctx.roundRect(this.width / 2, -88, this.attack.range, this.attack.height, 24);
         ctx.fill();

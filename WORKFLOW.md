@@ -32,12 +32,23 @@ Run verification before review:
 - Syntax-check JavaScript files with `node --check`.
 - Confirm changed files are present and referenced correctly.
 - For gameplay changes, verify the relevant state transitions and rules with a local smoke test where possible.
-- If browser automation is available, reload `file:///C:/Users/waseda/Desktop/work/K20/ex10/index.html` and visually inspect the changed behavior.
+- If browser automation is available, reload `file:///C:/Users/waseda/Desktop/work/K20/smartSE_K20/index.html` and visually inspect the changed behavior.
 - If verification fails, fix the issue and repeat verification.
 
 ## 4. Review In A New Session
 
 Review must be performed in a separate session from implementation.
+
+Important correction:
+
+- In this Codex workspace, a separate review session is available and must be used.
+- It is easy to mistakenly conclude that a separate session cannot be started. Before saying it is unavailable, explicitly check whether subagent/session spawning is available in the current tool list and try that path when allowed.
+- Do not assume that separate-session review is unavailable just because it requires another agent/session.
+- Use a spawned/forked Codex subagent as the separate review session when the tool is available.
+- A separate review session is not optional and must not be skipped because the implementation session cannot self-approve.
+- Do not publish, comment, or close the issue until the separate review session has returned `approved`.
+- If a previous run says "separate review was unavailable" without first attempting it, treat that as an operator error and run the review before publishing.
+- If a review attempt fails for a tooling reason, fix the tooling path or ask the user to open/allow the separate session. Do not abandon the ticket as "no permission" until that path has actually been attempted.
 
 The review session should:
 
@@ -65,6 +76,20 @@ Only publish when verification passes and the separate review session approves.
   - Commit URL
 - Close the issue as completed.
 - Move to the next open issue.
+
+Publishing permission fallback:
+
+- Prefer the GitHub app/connector for issue comments and closing when it has permission.
+- If the GitHub app/connector returns `403`, `FORBIDDEN`, or "Resource not accessible by integration", do not stop. Use the authenticated local `gh` CLI for the same GitHub operation.
+- Verify the operation after fallback with `gh issue view <number> --repo mkotoku/smartSE_K20 --comments` and `gh issue list --repo mkotoku/smartSE_K20 --state open`.
+- Treat connector permission errors as a tool limitation, not as a reason to give up on publishing.
+
+Comment encoding on Windows:
+
+- PowerShell pipelines can corrupt Japanese issue comment text into `????`.
+- Before posting Japanese text through `gh`, verify the exact path preserves UTF-8, or post ASCII/English text instead.
+- After posting any issue comment, immediately read it back with `gh issue view <number> --repo mkotoku/smartSE_K20 --comments`.
+- If a comment is garbled, edit the existing comment rather than adding a duplicate. A readable English replacement is acceptable if the UTF-8 path is unreliable.
 
 ## 6. Completion
 
@@ -111,7 +136,7 @@ const { chromium } = require("playwright");
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
-  await page.goto("file:///C:/Users/waseda/Desktop/work/K20/ex10/index.html", { waitUntil: "load" });
+  await page.goto("file:///C:/Users/waseda/Desktop/work/K20/smartSE_K20/index.html", { waitUntil: "load" });
   await page.getByRole("button", { name: "Play" }).click();
   await page.waitForTimeout(1000);
   const state = await page.evaluate(() => ({
