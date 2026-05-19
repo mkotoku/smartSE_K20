@@ -689,7 +689,7 @@
     }
 
     getSpecialType(fighter) {
-      if (fighter.style === "sword") return fighter.meter >= 100 ? "super" : "bladeWave";
+      if (fighter.style === "sword") return "bladeWave";
       return fighter.meter >= 100 ? "super" : "special";
     }
 
@@ -785,7 +785,8 @@
       if (fighter === this.player) this.showBanner(fighter.attack.label.toUpperCase(), 0.32);
       if (type === "special" || type === "bladeWave" || type === "bladeDive" || type === "shoryuken" || type === "dragonDance" || type === "tornado" || type === "super") {
         this.startSpecialCinematic(fighter, type);
-        this.spawnSpecialFlare(fighter, type);
+        if (type === "bladeWave") this.spawnBladeWaveFlare(fighter);
+        else this.spawnSpecialFlare(fighter, type);
         if (type !== "tornado" && type !== "bladeDive" && type !== "shoryuken" && type !== "dragonDance") this.spawnWave(fighter, type);
         this.slowMotion = Math.max(this.slowMotion, type === "super" ? 0.42 : 0.22);
         this.shake = Math.max(this.shake, type === "super" ? 13 : 7);
@@ -869,6 +870,53 @@
           spin: (Math.random() - 0.5) * 10,
           grow: 1.2,
           mesh: slash
+        });
+      }
+    }
+
+    spawnBladeWaveFlare(fighter) {
+      const originX = fighter.x + fighter.forwardX * 54;
+      const originZ = fighter.z + fighter.forwardZ * 54;
+      const color = 0xd8f2ff;
+      for (let i = 0; i < 7; i++) {
+        const wave = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08 + i * 0.018, 0.72 + i * 0.08, 0.035),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.78, depthWrite: false })
+        );
+        wave.rotation.y = fighter.yaw;
+        wave.rotation.z = -0.24 + i * 0.08;
+        this.effectGroup.add(wave);
+        this.effects.push({
+          x: originX + fighter.forwardX * i * 18,
+          y: fighter.y - 76,
+          z: originZ + fighter.forwardZ * i * 18,
+          vx: fighter.forwardX * (4.8 + i * 0.3),
+          vy: 0,
+          vz: fighter.forwardZ * (4.8 + i * 0.3),
+          life: 0.18 + i * 0.025,
+          maxLife: 0.34,
+          grow: 0.7,
+          mesh: wave
+        });
+      }
+      for (let i = 0; i < 10; i++) {
+        const spark = new THREE.Mesh(
+          new THREE.BoxGeometry(0.025, 0.025, 0.36),
+          new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : color, transparent: true, opacity: 0.9, depthWrite: false })
+        );
+        spark.rotation.y = fighter.yaw + (Math.random() - 0.5) * 0.42;
+        spark.rotation.z = (Math.random() - 0.5) * 0.5;
+        this.effectGroup.add(spark);
+        this.effects.push({
+          x: originX + (Math.random() - 0.5) * 12,
+          y: fighter.y - 72 + (Math.random() - 0.5) * 28,
+          z: originZ + (Math.random() - 0.5) * 12,
+          vx: fighter.forwardX * (3.2 + Math.random() * 2.4),
+          vy: (Math.random() - 0.5) * 1.2,
+          vz: fighter.forwardZ * (3.2 + Math.random() * 2.4),
+          life: 0.18 + Math.random() * 0.18,
+          maxLife: 0.3,
+          mesh: spark
         });
       }
     }
