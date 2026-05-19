@@ -21,9 +21,10 @@
   };
 
   const fighterSkins = {
-    ryu: { color: "#2f80ed", accent: "#ffd166", dark: "#111722" },
-    ken: { color: "#e94f64", accent: "#ffd166", dark: "#201016" },
-    chun: { color: "#56d6a6", accent: "#7df9ff", dark: "#09231f" }
+    ryu: { color: "#2f80ed", accent: "#ffd166", dark: "#111722", style: "striker" },
+    ken: { color: "#e94f64", accent: "#ffd166", dark: "#201016", style: "striker" },
+    chun: { color: "#56d6a6", accent: "#7df9ff", dark: "#09231f", style: "striker" },
+    cloud: { color: "#4d5b73", accent: "#d8f2ff", dark: "#151a22", style: "sword" }
   };
 
   const stageThemes = {
@@ -430,6 +431,23 @@
         new THREE.TorusGeometry(0.42, 0.035, 8, 32),
         new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.78, depthWrite: false })
       );
+      const sword = new THREE.Group();
+      const blade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.16, 1.28, 0.06),
+        new THREE.MeshStandardMaterial({ color: 0xd8f2ff, emissive: 0x4b8fb8, emissiveIntensity: 0.24, roughness: 0.28, metalness: 0.55 })
+      );
+      const guard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.48, 0.08, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x202838, emissive: 0x0c1422, roughness: 0.38, metalness: 0.4 })
+      );
+      const grip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 0.36, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0x151a22, roughness: 0.55, metalness: 0.22 })
+      );
+      blade.position.y = 0.48;
+      grip.position.y = -0.34;
+      sword.add(blade, guard, grip);
+      sword.visible = false;
       const labelCanvas = document.createElement("canvas");
       labelCanvas.width = 256;
       labelCanvas.height = 64;
@@ -448,7 +466,7 @@
         body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
         armL, armR, shoulderL, shoulderR, handL, handR,
         legL, legR, bootL, bootR, belt, sash,
-        attack, attackCore, attackRing, attackLabel
+        sword, attack, attackCore, attackRing, attackLabel
       );
       [
         body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
@@ -460,7 +478,7 @@
       return {
         group, body, head, hair, hairFront, eyeL, eyeR, browL, browR, mouth,
         armL, armR, shoulderL, shoulderR, handL, handR, legL, legR, bootL, bootR, belt, sash,
-        attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture
+        sword, blade, guard, grip, attack, attackCore, attackRing, attackLabel, labelCanvas, labelTexture
       };
     }
 
@@ -648,17 +666,31 @@
         if (this.input.consume("heavy")) this.tryAttack(p, "crouchHeavy");
         if (this.input.consume("special")) this.tryAttack(p, "throw");
       } else {
-        if (this.input.consume("light")) this.tryAttack(p, "light");
-        if (this.input.consume("heavy")) this.tryAttack(p, "heavy");
+        if (this.input.consume("light")) this.tryAttack(p, this.getLightType(p));
+        if (this.input.consume("heavy")) this.tryAttack(p, this.getHeavyType(p));
         if (this.input.consume("uppercut")) this.tryAttack(p, this.getUppercutType(p));
         if (this.input.consume("tornado")) this.tryAttack(p, "tornado");
-        if (this.input.consume("special")) this.tryAttack(p, p.meter >= 100 ? "super" : "special");
+        if (this.input.consume("special")) this.tryAttack(p, this.getSpecialType(p));
       }
     }
 
+    getLightType(fighter) {
+      return fighter.style === "sword" ? "bladeLight" : "light";
+    }
+
+    getHeavyType(fighter) {
+      return fighter.style === "sword" ? "bladeHeavy" : "heavy";
+    }
+
     getUppercutType(fighter) {
+      if (fighter.style === "sword") return "bladeDive";
       const chain = fighter.comboChain.join(",");
       return chain.endsWith("shoryuken") ? "dragonDance" : "shoryuken";
+    }
+
+    getSpecialType(fighter) {
+      if (fighter.style === "sword") return fighter.meter >= 100 ? "super" : "bladeWave";
+      return fighter.meter >= 100 ? "super" : "special";
     }
 
     handleCameraInput(dt) {
@@ -699,13 +731,13 @@
           this.cpuPlan = "punish";
           this.cpuMood = "punish";
         } else if (distanceX > 210) {
-          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? "special" : cpu.meter >= 25 && Math.random() < 0.22 ? "tornado" : "approach";
+          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? this.getSpecialType(cpu) : cpu.meter >= 25 && Math.random() < 0.22 ? "tornado" : "approach";
           this.cpuMood = "closing";
         } else if (distance < 66) {
           this.cpuPlan = Math.random() < 0.45 ? "throw" : Math.random() < 0.5 ? "low" : "retreat";
           this.cpuMood = "scramble";
         } else if (Math.random() < profile.aggression) {
-          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : cpu.meter >= 25 && Math.random() < 0.2 ? "tornado" : Math.random() < 0.18 ? "shoryuken" : Math.random() < 0.56 ? "light" : "heavy";
+          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : cpu.meter >= 25 && Math.random() < 0.2 ? "tornado" : Math.random() < 0.18 ? this.getUppercutType(cpu) : Math.random() < 0.56 ? this.getLightType(cpu) : this.getHeavyType(cpu);
           this.cpuMood = "attacking";
         } else {
           this.cpuPlan = Math.random() < 0.5 ? "guard" : "retreat";
@@ -737,8 +769,8 @@
           if (distanceZ > 20) cpu.vz = Math.sign(player.z - cpu.z) * profile.speed * 0.75;
         }
       }
-      if (["light", "heavy", "special", "shoryuken", "dragonDance", "tornado", "super", "throw"].includes(this.cpuPlan)) {
-        const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "shoryuken" || this.cpuPlan === "dragonDance" || this.cpuPlan === "tornado" || this.cpuPlan === "super" ? 158 : 126;
+      if (["light", "heavy", "bladeLight", "bladeHeavy", "special", "bladeWave", "bladeDive", "shoryuken", "dragonDance", "tornado", "super", "throw"].includes(this.cpuPlan)) {
+        const needRange = this.cpuPlan === "throw" ? 70 : this.cpuPlan === "special" || this.cpuPlan === "bladeWave" || this.cpuPlan === "bladeDive" || this.cpuPlan === "shoryuken" || this.cpuPlan === "dragonDance" || this.cpuPlan === "tornado" || this.cpuPlan === "super" ? 158 : 142;
         if (distance < needRange && distanceZ < 62) this.tryAttack(cpu, this.cpuPlan);
         else {
           cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
@@ -751,10 +783,10 @@
       if (!fighter.startAttack(type)) return false;
       this.sound.play(type === "super" ? "super" : "menu");
       if (fighter === this.player) this.showBanner(fighter.attack.label.toUpperCase(), 0.32);
-      if (type === "special" || type === "shoryuken" || type === "dragonDance" || type === "tornado" || type === "super") {
+      if (type === "special" || type === "bladeWave" || type === "bladeDive" || type === "shoryuken" || type === "dragonDance" || type === "tornado" || type === "super") {
         this.startSpecialCinematic(fighter, type);
         this.spawnSpecialFlare(fighter, type);
-        if (type !== "tornado" && type !== "shoryuken" && type !== "dragonDance") this.spawnWave(fighter, type);
+        if (type !== "tornado" && type !== "bladeDive" && type !== "shoryuken" && type !== "dragonDance") this.spawnWave(fighter, type);
         this.slowMotion = Math.max(this.slowMotion, type === "super" ? 0.42 : 0.22);
         this.shake = Math.max(this.shake, type === "super" ? 13 : 7);
       }
@@ -762,17 +794,17 @@
     }
 
     startSpecialCinematic(fighter, type) {
-      const length = type === "super" ? 0.52 : type === "dragonDance" ? 0.42 : type === "tornado" ? 0.28 : 0.34;
+      const length = type === "super" ? 0.52 : type === "bladeDive" ? 0.5 : type === "dragonDance" ? 0.42 : type === "tornado" ? 0.28 : 0.34;
       this.specialCinematic = { fighter, type, timer: length, duration: length };
-      this.stagePulseLight.intensity = type === "super" ? 3.6 : type === "dragonDance" ? 3.2 : 2.5;
-      this.stagePulseLight.color.set(type === "super" ? 0xffffff : type === "tornado" ? 0xffd166 : type === "shoryuken" || type === "dragonDance" ? 0xff8a2a : 0x7df9ff);
-      if (fighter === this.player) this.showBanner(type === "super" ? "METEOR RUSH" : type === "tornado" ? "TORNADO KICK" : type === "dragonDance" ? "DRAGON DANCE" : type === "shoryuken" ? "RISING DRAGON" : "SURGE DRIVE", 0.48);
+      this.stagePulseLight.intensity = type === "super" ? 3.6 : type === "bladeDive" || type === "dragonDance" ? 3.2 : 2.5;
+      this.stagePulseLight.color.set(type === "super" ? 0xffffff : type === "tornado" ? 0xffd166 : type === "bladeWave" || type === "bladeDive" ? 0xd8f2ff : type === "shoryuken" || type === "dragonDance" ? 0xff8a2a : 0x7df9ff);
+      if (fighter === this.player) this.showBanner(type === "super" ? "METEOR RUSH" : type === "tornado" ? "TORNADO KICK" : type === "bladeWave" ? "LIMIT WAVE" : type === "bladeDive" ? "SKY CLEAVER" : type === "dragonDance" ? "DRAGON DANCE" : type === "shoryuken" ? "RISING DRAGON" : "SURGE DRIVE", 0.48);
     }
 
     spawnSpecialFlare(fighter, type) {
-      const color = type === "super" ? 0xfff4a8 : type === "tornado" ? 0xffd166 : type === "shoryuken" || type === "dragonDance" ? 0xff8a2a : 0x7df9ff;
+      const color = type === "super" ? 0xfff4a8 : type === "tornado" ? 0xffd166 : type === "bladeWave" || type === "bladeDive" ? 0xd8f2ff : type === "shoryuken" || type === "dragonDance" ? 0xff8a2a : 0x7df9ff;
       const center = this.toWorld(fighter.x, fighter.y - 76, fighter.z);
-      const ringCount = type === "super" ? 4 : type === "dragonDance" ? 6 : type === "tornado" ? 5 : 3;
+      const ringCount = type === "super" ? 4 : type === "dragonDance" ? 6 : type === "tornado" ? 5 : type === "bladeDive" ? 5 : 3;
       for (let i = 0; i < ringCount; i++) {
         const ring = new THREE.Mesh(
           new THREE.TorusGeometry(0.45 + i * 0.16, 0.018, 8, 80),
@@ -790,7 +822,7 @@
           vz: fighter.forwardZ * 0.08,
           life: 0.42 + i * 0.04,
           maxLife: 0.42 + i * 0.04,
-          spin: type === "super" ? 6.2 : type === "dragonDance" ? 10.5 : type === "tornado" ? 8.4 : 4.4,
+          spin: type === "super" ? 6.2 : type === "dragonDance" ? 10.5 : type === "tornado" || type === "bladeDive" ? 8.4 : 4.4,
           grow: 1.8 + i * 0.25,
           mesh: ring
         });
@@ -815,22 +847,22 @@
         grow: type === "dragonDance" ? 1.1 : 0.65,
         mesh: pillar
       });
-      const slashCount = type === "super" ? 18 : type === "dragonDance" ? 24 : type === "tornado" ? 16 : type === "shoryuken" ? 16 : 10;
+      const slashCount = type === "super" ? 18 : type === "bladeDive" ? 22 : type === "dragonDance" ? 24 : type === "tornado" ? 16 : type === "shoryuken" ? 16 : type === "bladeWave" ? 14 : 10;
       for (let i = 0; i < slashCount; i++) {
         const slash = new THREE.Mesh(
-          new THREE.BoxGeometry(0.035, 0.018, type === "super" || type === "dragonDance" ? 0.95 : 0.68),
+          new THREE.BoxGeometry(type === "bladeDive" || type === "bladeWave" ? 0.045 : 0.035, 0.018, type === "super" || type === "dragonDance" || type === "bladeDive" ? 0.95 : 0.68),
           new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : color, transparent: true, opacity: 0.92, depthWrite: false })
         );
         slash.position.copy(center);
         slash.rotation.y = fighter.yaw + (type === "dragonDance" ? i * 0.52 : 0) + (Math.random() - 0.5) * 1.15;
-        slash.rotation.z = (type === "shoryuken" || type === "dragonDance" ? 0.7 : 0) + (Math.random() - 0.5) * 1.6;
+        slash.rotation.z = (type === "bladeDive" ? -0.8 : type === "shoryuken" || type === "dragonDance" ? 0.7 : 0) + (Math.random() - 0.5) * 1.6;
         this.effectGroup.add(slash);
         this.effects.push({
           x: fighter.x + (Math.random() - 0.5) * 20,
-          y: fighter.y - (type === "shoryuken" || type === "dragonDance" ? 106 : 78) + (Math.random() - 0.5) * 42,
+          y: fighter.y - (type === "bladeDive" ? 132 : type === "shoryuken" || type === "dragonDance" ? 106 : 78) + (Math.random() - 0.5) * 42,
           z: fighter.z + (Math.random() - 0.5) * 20,
           vx: fighter.forwardX * (1.8 + Math.random() * 2.4),
-          vy: (type === "shoryuken" || type === "dragonDance" ? -1.4 : -0.2) + Math.random() * 2.2,
+          vy: (type === "bladeDive" ? 1.6 : type === "shoryuken" || type === "dragonDance" ? -1.4 : -0.2) + Math.random() * 2.2,
           vz: fighter.forwardZ * (1.8 + Math.random() * 2.4),
           life: 0.18 + Math.random() * 0.2,
           maxLife: 0.34,
@@ -843,21 +875,23 @@
 
     spawnWave(fighter, type) {
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(type === "super" ? 0.34 : 0.22, 24, 16),
-        new THREE.MeshBasicMaterial({ color: type === "super" ? 0xffd166 : 0x7df9ff, transparent: true, opacity: 0.78 })
+        type === "bladeWave" ? new THREE.BoxGeometry(0.18, 0.72, 0.04) : new THREE.SphereGeometry(type === "super" ? 0.34 : 0.22, 24, 16),
+        new THREE.MeshBasicMaterial({ color: type === "super" ? 0xffd166 : type === "bladeWave" ? 0xd8f2ff : 0x7df9ff, transparent: true, opacity: 0.78 })
       );
+      mesh.rotation.y = fighter.yaw;
       this.projectileGroup.add(mesh);
       this.projectiles.push({
         owner: fighter,
         x: fighter.x + fighter.forwardX * 72,
         y: fighter.y - 72,
         z: fighter.z + fighter.forwardZ * 72,
-        vx: fighter.forwardX * (type === "super" ? 620 : 480),
-        vz: fighter.forwardZ * (type === "super" ? 620 : 480),
-        radius: type === "super" ? 34 : 22,
-        damage: type === "super" ? 18 : 10,
-        knockback: type === "super" ? 430 : 260,
+        vx: fighter.forwardX * (type === "super" ? 620 : type === "bladeWave" ? 560 : 480),
+        vz: fighter.forwardZ * (type === "super" ? 620 : type === "bladeWave" ? 560 : 480),
+        radius: type === "super" ? 34 : type === "bladeWave" ? 30 : 22,
+        damage: type === "super" ? 18 : type === "bladeWave" ? 14 : 10,
+        knockback: type === "super" ? 430 : type === "bladeWave" ? 360 : 260,
         life: 0.8,
+        type,
         super: type === "super",
         hit: false,
         mesh
@@ -891,14 +925,14 @@
         if (!rectsOverlap(box, defender.bounds)) continue;
         const blocked = defender.guard && this.isFacing(defender, projectile.owner) && defender.onGround;
         const attack = {
-          name: projectile.super ? "super" : "special",
-          label: projectile.super ? "Meteor Wave" : "Surge Wave",
+          name: projectile.super ? "super" : projectile.type === "bladeWave" ? "bladeWave" : "special",
+          label: projectile.super ? "Meteor Wave" : projectile.type === "bladeWave" ? "Limit Wave" : "Surge Wave",
           damage: projectile.damage,
           knockback: projectile.knockback,
           hitStun: projectile.super ? 0.44 : 0.28,
           meterGain: 0,
           sound: projectile.super ? "super" : "hitSpecial",
-          spark: projectile.super ? "#ffffff" : "#7df9ff"
+          spark: projectile.super ? "#ffffff" : projectile.type === "bladeWave" ? "#d8f2ff" : "#7df9ff"
         };
         this.applyHit(projectile.owner, defender, attack, blocked, projectile.x, projectile.y, projectile.z);
         projectile.hit = true;
@@ -1246,6 +1280,12 @@
       [rig.bootL, rig.bootR, rig.belt].forEach((part) => part.material.color.copy(dark));
       [rig.head, rig.handL, rig.handR].forEach((part) => part.material.color.copy(skin));
       [rig.hair, rig.hairFront, rig.browL, rig.browR].forEach((part) => part.material.color.copy(dark));
+      rig.sword.visible = fighter.style === "sword";
+      if (rig.sword.visible) {
+        rig.blade.material.color.copy(new THREE.Color(fighter.flash > 0 ? "#ffffff" : fighter.accent));
+        rig.guard.material.color.copy(dark);
+        rig.grip.material.color.copy(dark);
+      }
 
       const walk = fighter.state === "walk" ? Math.sin(time / 80) : 0;
       const isCrouch = fighter.crouching || fighter.state === "crouchLight" || fighter.state === "crouchHeavy";
@@ -1283,15 +1323,15 @@
       rig.handR.rotation.copy(rig.armR.rotation);
       rig.bootL.rotation.copy(rig.legL.rotation);
       rig.bootR.rotation.copy(rig.legR.rotation);
-      if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "special" || fighter.state === "shoryuken" || fighter.state === "dragonDance" || fighter.state === "tornado" || fighter.state === "super") {
+      if (fighter.state === "light" || fighter.state === "heavy" || fighter.state === "bladeLight" || fighter.state === "bladeHeavy" || fighter.state === "special" || fighter.state === "bladeWave" || fighter.state === "bladeDive" || fighter.state === "shoryuken" || fighter.state === "dragonDance" || fighter.state === "tornado" || fighter.state === "super") {
         const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
         const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 1;
         const charge = Math.sin(Math.min(1, progress * 1.35) * Math.PI);
-        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" ? 0.66 : fighter.state === "shoryuken" || fighter.state === "dragonDance" ? 0.42 : fighter.state === "tornado" ? 0.72 : fighter.state === "super" ? 0.98 : 0.84;
+        const reachPose = fighter.state === "light" ? 0.46 : fighter.state === "heavy" || fighter.state === "bladeHeavy" ? 0.66 : fighter.state === "bladeLight" ? 0.58 : fighter.state === "bladeWave" || fighter.state === "bladeDive" ? 0.76 : fighter.state === "shoryuken" || fighter.state === "dragonDance" ? 0.42 : fighter.state === "tornado" ? 0.72 : fighter.state === "super" ? 0.98 : 0.84;
         rig.armR.position.set(0.18, 1.08 + crouch + charge * 0.08, reachPose + charge * (fighter.state === "super" ? 0.22 : 0.14));
-        rig.armR.rotation.x = fighter.state === "shoryuken" || fighter.state === "dragonDance" ? -0.16 : Math.PI / 2 + (fighter.state === "super" ? charge * 0.38 : 0);
-        rig.armR.rotation.y = fighter.state === "heavy" ? -0.28 : fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.55 : fighter.state === "dragonDance" ? Math.sin(progress * Math.PI * 10) * 0.42 : fighter.state === "super" ? Math.sin(progress * Math.PI * 2) * 0.22 : 0;
-        rig.armR.rotation.z = fighter.state === "shoryuken" || fighter.state === "dragonDance" ? -0.18 : fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.7 : fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
+        rig.armR.rotation.x = fighter.state === "bladeDive" ? 0.72 - charge * 1.35 : fighter.state === "shoryuken" || fighter.state === "dragonDance" ? -0.16 : Math.PI / 2 + (fighter.state === "super" ? charge * 0.38 : 0);
+        rig.armR.rotation.y = fighter.state === "heavy" || fighter.state === "bladeHeavy" ? -0.28 : fighter.state === "bladeLight" || fighter.state === "bladeWave" ? Math.sin(progress * Math.PI * 2) * 0.44 : fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.55 : fighter.state === "dragonDance" ? Math.sin(progress * Math.PI * 10) * 0.42 : fighter.state === "super" ? Math.sin(progress * Math.PI * 2) * 0.22 : 0;
+        rig.armR.rotation.z = fighter.state === "bladeLight" || fighter.state === "bladeHeavy" || fighter.state === "bladeWave" ? -0.72 + charge * 0.62 : fighter.state === "shoryuken" || fighter.state === "dragonDance" ? -0.18 : fighter.state === "tornado" ? Math.sin(progress * Math.PI * 8) * 0.7 : fighter.state === "super" ? -0.38 + charge * 0.28 : 0;
         rig.armL.position.set(-0.24, 1.0 + crouch + charge * 0.18, fighter.state === "super" ? 0.62 : 0.24);
         rig.armL.rotation.x = fighter.state === "shoryuken" || fighter.state === "dragonDance" ? 1.04 : fighter.state === "super" ? Math.PI / 2 - charge * 0.36 : 0.45 + charge * 0.42;
         rig.handR.position.set(0.18, 0.74 + crouch + charge * 0.08, reachPose + 0.4 + charge * 0.16);
@@ -1302,7 +1342,7 @@
         rig.shoulderR.position.set(0.22, 1.22 + crouch + charge * 0.04, 0.18);
         rig.shoulderL.rotation.copy(rig.armL.rotation);
         rig.shoulderR.rotation.copy(rig.armR.rotation);
-        if (fighter.state === "special" || fighter.state === "shoryuken" || fighter.state === "dragonDance" || fighter.state === "tornado" || fighter.state === "super") {
+        if (fighter.state === "special" || fighter.state === "bladeWave" || fighter.state === "bladeDive" || fighter.state === "shoryuken" || fighter.state === "dragonDance" || fighter.state === "tornado" || fighter.state === "super") {
           rig.body.rotation.x = -0.14 - charge * (fighter.state === "super" ? 0.22 : 0.12);
           rig.head.position.y += charge * 0.1;
           rig.group.scale.setScalar(1 + charge * (fighter.state === "super" ? 0.18 : 0.1));
@@ -1314,6 +1354,11 @@
             rig.handR.rotation.copy(rig.armR.rotation);
             rig.legL.rotation.x = -0.28 - charge * 0.35;
             rig.legR.rotation.x = 0.48 + charge * 0.28;
+          }
+          if (fighter.state === "bladeDive") {
+            rig.group.rotation.y += Math.sin(progress * Math.PI) * 0.46;
+            rig.body.rotation.x = -0.5 + charge * 0.45;
+            rig.handR.position.set(0.08, 1.62 - charge * 0.46, 0.64);
           }
           if (fighter.state === "tornado") {
             const spin = progress * Math.PI * 8;
@@ -1354,10 +1399,11 @@
         rig.handR.position.set(0.56, 0.72 + crouch, 0.34);
         rig.handL.rotation.copy(rig.armL.rotation);
         rig.handR.rotation.copy(rig.armR.rotation);
-      } else if (fighter.state !== "special" && fighter.state !== "shoryuken" && fighter.state !== "dragonDance" && fighter.state !== "tornado" && fighter.state !== "super") {
+      } else if (fighter.state !== "special" && fighter.state !== "bladeWave" && fighter.state !== "bladeDive" && fighter.state !== "shoryuken" && fighter.state !== "dragonDance" && fighter.state !== "tornado" && fighter.state !== "super") {
         rig.body.rotation.x = 0;
         rig.body.rotation.y = 0;
       }
+      this.syncSwordPose(rig, fighter, time);
       if (fighter.state === "guard") {
         rig.armL.position.set(-0.12, 1.16 + crouch, 0.2);
         rig.armR.position.set(0.12, 1.16 + crouch, 0.2);
@@ -1371,6 +1417,38 @@
 
       this.syncVictoryPose(rig, fighter, time);
       this.syncAttackCue(rig, fighter);
+    }
+
+    syncSwordPose(rig, fighter, time) {
+      if (!rig.sword.visible) return;
+      const total = fighter.attack ? fighter.attack.startup + fighter.attack.active + fighter.attack.recovery : 1;
+      const progress = fighter.attack ? Math.min(1, fighter.attackTimer / total) : 0;
+      const swing = Math.sin(progress * Math.PI);
+      rig.sword.position.set(0.42, 0.95, 0.08);
+      rig.sword.rotation.set(-0.72, 0.2, -0.82);
+      rig.sword.scale.setScalar(1);
+      if (fighter.state === "walk") {
+        rig.sword.rotation.z += Math.sin(time / 80) * 0.08;
+      }
+      if (fighter.state === "bladeLight") {
+        rig.sword.position.set(0.58, 1.06, 0.62 + swing * 0.22);
+        rig.sword.rotation.set(1.22 - swing * 1.4, -0.35 + swing * 1.2, -1.15 + swing * 2.1);
+      } else if (fighter.state === "bladeHeavy") {
+        rig.sword.position.set(0.48, 1.22, 0.58 + swing * 0.36);
+        rig.sword.rotation.set(1.62 - swing * 2.2, -0.72 + swing * 1.6, -1.85 + swing * 3.2);
+        rig.sword.scale.set(1.08, 1.12, 1);
+      } else if (fighter.state === "bladeWave") {
+        rig.sword.position.set(0.4, 1.2 + swing * 0.06, 0.72 + swing * 0.34);
+        rig.sword.rotation.set(Math.PI / 2 - swing * 0.8, 0.08, -0.28 + swing * 0.72);
+        rig.sword.scale.set(1.06, 1.18, 1);
+      } else if (fighter.state === "bladeDive") {
+        rig.sword.position.set(0.18, 1.64 - swing * 0.5, 0.66);
+        rig.sword.rotation.set(-0.2 + swing * 2.4, 0.08, -0.12);
+        rig.sword.scale.set(1.12, 1.22, 1);
+      } else if (fighter.state === "super") {
+        rig.sword.position.set(0.5, 1.18, 0.58 + swing * 0.28);
+        rig.sword.rotation.set(Math.PI / 2, 0.2, -0.62 + swing);
+      }
     }
 
     syncVictoryPose(rig, fighter, time) {
@@ -1438,7 +1516,11 @@
       const colorMap = {
         light: 0xfef3a1,
         heavy: 0xff6b4a,
+        bladeLight: 0xd8f2ff,
+        bladeHeavy: 0xb9e7ff,
         special: 0x7df9ff,
+        bladeWave: 0xd8f2ff,
+        bladeDive: 0xffffff,
         shoryuken: 0xff8a2a,
         dragonDance: 0xffb347,
         tornado: 0xffd166,
@@ -1449,7 +1531,7 @@
       };
       const color = colorMap[attack.name] || 0xffffff;
       const reach = attack.name === "throw" ? 0.42 : attack.range / 82;
-      const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "shoryuken" ? 1.25 : attack.name === "dragonDance" ? 1.5 : attack.name === "tornado" ? 1.18 : attack.name === "super" ? 1.45 : 1.05;
+      const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "bladeLight" ? 1.0 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "bladeHeavy" || attack.name === "bladeWave" ? 1.32 : attack.name === "bladeDive" ? 1.46 : attack.name === "shoryuken" ? 1.25 : attack.name === "dragonDance" ? 1.5 : attack.name === "tornado" ? 1.18 : attack.name === "super" ? 1.45 : 1.05;
       const forward = 0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22;
       const lateral = attack.name === "heavy" ? Math.sin(progress * Math.PI * 2) * 0.08 : 0;
 
@@ -1459,13 +1541,13 @@
       rig.attack.material.opacity = isActive ? 0.42 : 0.18;
 
       rig.attackCore.position.set(lateral, (attack.level === "low" ? 0.48 : 1.08) + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
-      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "dragonDance" ? 1.7 : attack.name === "shoryuken" ? 1.45 : attack.name === "tornado" ? 1.5 : attack.name === "special" ? 1.35 : attack.name === "heavy" ? 1.08 : 0.82);
+      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "dragonDance" ? 1.7 : attack.name === "bladeDive" ? 1.65 : attack.name === "shoryuken" ? 1.45 : attack.name === "tornado" ? 1.5 : attack.name === "special" || attack.name === "bladeWave" ? 1.35 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.08 : 0.82);
       rig.attackCore.material.color.set(color);
       rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
 
       rig.attackRing.position.copy(rig.attackCore.position);
       rig.attackRing.rotation.set(Math.PI / 2, 0, progress * Math.PI * 3);
-      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "dragonDance" ? 1.55 : attack.name === "shoryuken" ? 1.38 : attack.name === "tornado" ? 1.45 : attack.name === "heavy" ? 1.25 : 1);
+      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "dragonDance" ? 1.55 : attack.name === "bladeDive" ? 1.5 : attack.name === "shoryuken" ? 1.38 : attack.name === "tornado" ? 1.45 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.25 : 1);
       rig.attackRing.material.color.set(color);
       rig.attackRing.material.opacity = isActive ? 0.9 : 0.34;
 

@@ -34,6 +34,44 @@
       sound: "hitHeavy",
       spark: "#ff8a66"
     },
+    bladeLight: {
+      name: "bladeLight",
+      label: "Blade Cut",
+      level: "mid",
+      damage: 8,
+      meterGain: 9,
+      startup: 0.07,
+      active: 0.16,
+      recovery: 0.18,
+      range: 92,
+      height: 48,
+      depth: 72,
+      knockback: 190,
+      hitStun: 0.24,
+      cancelWindow: 0.14,
+      sound: "hitLight",
+      spark: "#d8f2ff",
+      sword: true
+    },
+    bladeHeavy: {
+      name: "bladeHeavy",
+      label: "Buster Slash",
+      level: "mid",
+      damage: 16,
+      meterGain: 14,
+      startup: 0.16,
+      active: 0.18,
+      recovery: 0.34,
+      range: 126,
+      height: 60,
+      depth: 84,
+      knockback: 330,
+      hitStun: 0.36,
+      cancelWindow: 0.12,
+      sound: "hitHeavy",
+      spark: "#b9e7ff",
+      sword: true
+    },
     special: {
       name: "special",
       label: "Surge Kick",
@@ -51,6 +89,48 @@
       cancelWindow: 0,
       sound: "hitSpecial",
       spark: "#7df9ff"
+    },
+    bladeWave: {
+      name: "bladeWave",
+      label: "Limit Wave",
+      level: "mid",
+      damage: 15,
+      meterGain: 5,
+      meterCost: 20,
+      startup: 0.12,
+      active: 0.22,
+      recovery: 0.36,
+      range: 112,
+      height: 70,
+      depth: 92,
+      knockback: 360,
+      hitStun: 0.38,
+      cancelWindow: 0,
+      sound: "hitSpecial",
+      spark: "#b9e7ff",
+      sword: true
+    },
+    bladeDive: {
+      name: "bladeDive",
+      label: "Sky Cleaver",
+      level: "rising",
+      damage: 22,
+      meterGain: 12,
+      startup: 0.08,
+      active: 0.42,
+      recovery: 0.42,
+      range: 98,
+      height: 118,
+      depth: 94,
+      knockback: 420,
+      verticalKnockback: -540,
+      selfLift: -780,
+      hitStun: 0.52,
+      knockdown: 0.82,
+      cancelWindow: 0,
+      sound: "hitSpecial",
+      spark: "#ffffff",
+      sword: true
     },
     shoryuken: {
       name: "shoryuken",
@@ -199,6 +279,7 @@
       this.color = options.color;
       this.accent = options.accent;
       this.dark = options.dark;
+      this.style = options.style || "striker";
       this.isCpu = Boolean(options.isCpu);
       this.startX = options.x;
       this.reset(options.x);
@@ -263,6 +344,8 @@
       if (this.attackTimer < this.attack.startup + this.attack.active) return false;
       const chain = this.comboChain.join(",");
       return (type === "heavy" && chain.endsWith("light")) ||
+        (type === "bladeHeavy" && chain.endsWith("bladeLight")) ||
+        (type === "bladeWave" && /bladeLight,bladeHeavy$/.test(chain)) ||
         (type === "special" && /light,heavy$/.test(chain)) ||
         (type === "dragonDance" && chain.endsWith("shoryuken")) ||
         type === "super";
@@ -306,6 +389,12 @@
           this.vx = this.forwardX * (this.attack.name === "dragonDance" ? 210 : 130);
           this.vz = this.forwardZ * (this.attack.name === "dragonDance" ? 210 : 130) + spiral;
           this.vy = Math.min(this.vy, lift);
+        } else if (this.attack.name === "bladeDive") {
+          const total = this.attack.startup + this.attack.active + this.attack.recovery;
+          const progress = Math.min(1, this.attackTimer / total);
+          this.vx = this.forwardX * 170;
+          this.vz = this.forwardZ * 170;
+          this.vy = progress < 0.38 ? Math.min(this.vy, this.attack.selfLift) : Math.max(this.vy, 920);
         }
         const total = this.attack.startup + this.attack.active + this.attack.recovery;
         if (this.attackTimer >= total) {
@@ -338,7 +427,7 @@
 
       for (const ghost of this.afterImages) ghost.life -= dt;
       this.afterImages = this.afterImages.filter((ghost) => ghost.life > 0);
-      if (this.attack && (this.attack.name === "special" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super")) {
+      if (this.attack && (this.attack.name === "special" || this.attack.name === "bladeWave" || this.attack.name === "bladeDive" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super")) {
         this.afterImages.push({ x: this.x, y: this.y, facing: this.facing, life: 0.18, state: this.state });
         this.afterImages = this.afterImages.slice(-8);
       }
@@ -363,7 +452,7 @@
       const isLow = this.attack.level === "low";
       const fx = this.forwardX || this.facing;
       const fz = this.forwardZ || 0;
-      const depth = this.depth + 36;
+      const depth = this.attack.depth || this.depth + 36;
       const centerX = this.x + fx * (this.width / 2 + range / 2);
       const centerZ = this.z + fz * (this.depth / 2 + range / 2);
       return {
@@ -447,9 +536,13 @@
 
       let frontArm = [23, chestY + 12, 42, chestY + 28, 50, chestY + 42];
       let backArm = [-22, chestY + 14, -36, chestY + 31, -35, chestY + 48];
-      if (this.state === "light") frontArm = [23, chestY + 10, 58, chestY + 9, 82, chestY + 14];
-      if (this.state === "heavy") frontArm = [23, chestY + 12, 60, chestY - 6, 94, chestY + 6];
+      if (this.state === "light" || this.state === "bladeLight") frontArm = [23, chestY + 10, 58, chestY + 9, 82, chestY + 14];
+      if (this.state === "heavy" || this.state === "bladeHeavy") frontArm = [23, chestY + 12, 60, chestY - 6, 94, chestY + 6];
       if (this.state === "special" || this.state === "super") frontArm = [23, chestY + 8, 66, chestY - 6, 108, chestY + 4];
+      if (this.state === "bladeWave" || this.state === "bladeDive") {
+        frontArm = [22, chestY + 8, 64, chestY - 20, 96, chestY - 34];
+        backArm = [-20, chestY + 14, -34, chestY + 28, -30, chestY + 50];
+      }
       if (this.state === "shoryuken" || this.state === "dragonDance") {
         frontArm = [18, chestY + 4, 32, chestY - 34, 28, chestY - 72];
         backArm = [-22, chestY + 12, -40, chestY - 4, -50, chestY + 20];
@@ -483,7 +576,7 @@
       const box = this.attackBox();
       if (box && !ghost) {
         const pulse = this.attack.name === "super" ? 0.65 : 0.38;
-        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
+        ctx.fillStyle = this.attack.name === "special" || this.attack.name === "bladeWave" || this.attack.name === "bladeDive" || this.attack.name === "shoryuken" || this.attack.name === "dragonDance" || this.attack.name === "tornado" || this.attack.name === "super" ? `rgba(125, 249, 255, ${pulse})` : "rgba(255, 255, 255, 0.28)";
         ctx.beginPath();
         ctx.roundRect(this.width / 2, -88, this.attack.range, this.attack.height, 24);
         ctx.fill();
