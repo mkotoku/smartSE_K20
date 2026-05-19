@@ -1468,13 +1468,32 @@
           if (fighter.state === "bladeDive") {
             const windup = Math.min(1, progress / 0.34);
             const chop = Math.max(0, Math.min(1, (progress - 0.34) / 0.34));
-            rig.group.rotation.y += Math.sin(progress * Math.PI) * 0.58;
-            rig.body.rotation.x = -0.36 - windup * 0.36 + chop * 0.92;
+            const slam = 1 - Math.pow(1 - chop, 3);
+            const rightHand = {
+              x: 0.08 - slam * 0.03,
+              y: 1.82 - slam * 0.96,
+              z: 0.2 + slam * 1.0
+            };
+            const leftHand = {
+              x: -0.08 + slam * 0.03,
+              y: 1.72 - slam * 0.82,
+              z: 0.16 + slam * 0.88
+            };
+            rig.group.rotation.y += Math.sin(progress * Math.PI) * 0.28;
+            rig.body.rotation.x = -0.18 - windup * 0.28 + slam * 0.7;
             rig.head.position.y += windup * 0.12;
-            rig.handR.position.set(0.08, 1.72 - chop * 0.74, 0.62 + chop * 0.34);
-            rig.handL.position.set(-0.1, 1.58 - chop * 0.58, 0.54 + chop * 0.3);
+            this.setVoxelLimb(rig.armR, { x: 0.32, y: 1.2 + crouch, z: 0.02 }, rightHand, 0.66);
+            this.setVoxelLimb(rig.armL, { x: -0.32, y: 1.18 + crouch, z: 0.02 }, leftHand, 0.66);
+            rig.shoulderR.position.set(0.32, 1.2 + crouch, 0.02);
+            rig.shoulderL.position.set(-0.32, 1.18 + crouch, 0.02);
+            rig.handR.position.set(rightHand.x, rightHand.y, rightHand.z);
+            rig.handL.position.set(leftHand.x, leftHand.y, leftHand.z);
+            rig.shoulderR.rotation.copy(rig.armR.rotation);
+            rig.shoulderL.rotation.copy(rig.armL.rotation);
+            rig.handR.rotation.copy(rig.armR.rotation);
+            rig.handL.rotation.copy(rig.armL.rotation);
             rig.legL.rotation.x = -0.42 - windup * 0.3;
-            rig.legR.rotation.x = 0.58 + chop * 0.36;
+            rig.legR.rotation.x = 0.58 + slam * 0.36;
           }
           if (fighter.state === "tornado") {
             const spin = progress * Math.PI * 8;
@@ -1564,16 +1583,16 @@
         const anticipation = Math.sin(windup * Math.PI / 2);
         const slam = 1 - Math.pow(1 - chop, 3);
         rig.sword.position.set(
-          0.18 + anticipation * 0.08 - slam * 0.2,
-          1.36 + anticipation * 0.74 - slam * 1.02 + follow * 0.24,
-          0.32 + anticipation * 0.2 + slam * 0.88
+          0.06 + anticipation * 0.02 - slam * 0.04,
+          1.86 + anticipation * 0.4 - slam * 1.46 + follow * 0.18,
+          0.18 + anticipation * 0.08 + slam * 1.06
         );
         rig.sword.rotation.set(
-          -1.02 + anticipation * 2.75 + slam * 2.95 - follow * 0.52,
-          0.08 + anticipation * 0.12 - slam * 0.08,
-          -0.18 - anticipation * 0.38 + slam * 0.18
+          -0.08 + anticipation * 0.22 + slam * 2.86 - follow * 0.28,
+          0.02,
+          -0.06 + anticipation * 0.08 - slam * 0.04
         );
-        rig.sword.scale.set(1.22 + slam * 0.16, 1.38 + slam * 0.22, 1.14);
+        rig.sword.scale.set(1.26 + slam * 0.14, 1.44 + slam * 0.24, 1.16);
       } else if (fighter.state === "super") {
         rig.sword.position.set(0.5, 1.18, 0.58 + swing * 0.28);
         rig.sword.rotation.set(Math.PI / 2, 0.2, -0.62 + swing);
