@@ -146,7 +146,7 @@
       depth: 82,
       knockback: 360,
       verticalKnockback: -760,
-      selfLift: -720,
+      selfLift: -470,
       hitStun: 0.46,
       knockdown: 0.75,
       cancelWindow: 0,
@@ -168,7 +168,7 @@
       depth: 104,
       knockback: 210,
       verticalKnockback: -820,
-      selfLift: -620,
+      selfLift: -440,
       hitStun: 0.32,
       knockdown: 0.95,
       cancelWindow: 0,
@@ -388,7 +388,11 @@
           const spiral = this.attack.name === "dragonDance" ? Math.sin(this.attackTimer * 30) * 120 : 0;
           this.vx = this.forwardX * (this.attack.name === "dragonDance" ? 210 : 130);
           this.vz = this.forwardZ * (this.attack.name === "dragonDance" ? 210 : 130) + spiral;
-          this.vy = Math.min(this.vy, lift);
+          if (this.attackTimer < (this.attack.name === "dragonDance" ? 0.22 : 0.16)) {
+            this.vy = Math.min(this.vy, lift);
+          } else {
+            this.vy = Math.max(this.vy, -120);
+          }
         } else if (this.attack.name === "bladeDive") {
           const total = this.attack.startup + this.attack.active + this.attack.recovery;
           const progress = Math.min(1, this.attackTimer / total);
