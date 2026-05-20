@@ -1458,10 +1458,22 @@
           rig.group.scale.setScalar(1 + charge * (fighter.state === "super" ? 0.18 : 0.1));
           if (fighter.state === "shoryuken" || fighter.state === "dragonDance") {
             const spin = progress * Math.PI * (fighter.state === "dragonDance" ? 7 : 3.2);
+            const punchDrive = Math.sin(Math.min(1, progress * 1.45) * Math.PI);
+            const punchTop = 1.98 + punchDrive * (fighter.state === "dragonDance" ? 0.18 : 0.28);
+            const punchForward = 0.22 + punchDrive * 0.26;
             rig.group.rotation.y += spin;
-            rig.body.rotation.z = -0.08 + charge * 0.16;
-            rig.handR.position.set(0.14, 1.64 + charge * 0.2, 0.28);
+            rig.body.rotation.x = -0.28 - charge * 0.2;
+            rig.body.rotation.z = -0.1 + charge * 0.22;
+            this.setVoxelLimb(rig.armR, { x: 0.28, y: 1.18 + crouch, z: 0.02 }, { x: 0.1, y: punchTop, z: punchForward }, 0.66);
+            this.setVoxelLimb(rig.armL, { x: -0.34, y: 1.08 + crouch, z: 0.02 }, { x: -0.42, y: 0.78 + crouch, z: -0.12 }, 0.66);
+            rig.shoulderR.position.set(0.28, 1.18 + crouch, 0.02);
+            rig.shoulderL.position.set(-0.34, 1.08 + crouch, 0.02);
+            rig.handR.position.set(0.1, punchTop, punchForward);
+            rig.handL.position.set(-0.42, 0.78 + crouch, -0.12);
+            rig.shoulderR.rotation.copy(rig.armR.rotation);
+            rig.shoulderL.rotation.copy(rig.armL.rotation);
             rig.handR.rotation.copy(rig.armR.rotation);
+            rig.handL.rotation.copy(rig.armL.rotation);
             rig.legL.rotation.x = -0.28 - charge * 0.35;
             rig.legR.rotation.x = 0.48 + charge * 0.28;
           }
@@ -1497,11 +1509,14 @@
           }
           if (fighter.state === "tornado") {
             const spin = progress * Math.PI * 8;
+            const leftFoot = { x: Math.cos(spin) * 0.88, y: 0.58 + Math.sin(spin * 2) * 0.08, z: Math.sin(spin) * 0.52 };
+            const rightFoot = { x: -Math.cos(spin) * 0.88, y: 0.58 - Math.sin(spin * 2) * 0.08, z: -Math.sin(spin) * 0.52 };
             rig.body.rotation.y = spin;
-            rig.legL.rotation.x = Math.PI / 2 + Math.sin(spin) * 0.4;
-            rig.legR.rotation.x = Math.PI / 2 + Math.cos(spin) * 0.4;
-            rig.bootL.position.set(-0.18, 0.48 + Math.cos(spin) * 0.08, 0.68);
-            rig.bootR.position.set(0.18, 0.48 + Math.sin(spin) * 0.08, 0.68);
+            rig.body.rotation.x = -0.08;
+            this.setVoxelLimb(rig.legL, { x: -0.16, y: 0.54 + crouch * 0.2, z: 0 }, leftFoot, 0.64);
+            this.setVoxelLimb(rig.legR, { x: 0.16, y: 0.54 + crouch * 0.2, z: 0 }, rightFoot, 0.64);
+            rig.bootL.position.set(leftFoot.x, leftFoot.y, leftFoot.z);
+            rig.bootR.position.set(rightFoot.x, rightFoot.y, rightFoot.z);
             rig.bootL.rotation.copy(rig.legL.rotation);
             rig.bootR.rotation.copy(rig.legR.rotation);
           }
