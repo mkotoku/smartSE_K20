@@ -35,6 +35,7 @@ file:///C:/Users/waseda/Desktop/work/K20/ex10/index.html
 | --- | --- |
 | Uppercut / Dragon Dance | `U` |
 | Storm Blade: Sky Cleaver | `U` |
+| Storm Blade: Sonic Slash | `I` |
 | Storm Blade: Limit Wave | `L` |
 | 左右移動 | `A` / `D` |
 | 奥行き移動 | `Q` / `E` |

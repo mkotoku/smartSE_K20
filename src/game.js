@@ -680,7 +680,7 @@
         if (this.input.consume("light")) this.tryAttack(p, this.getLightType(p));
         if (this.input.consume("heavy")) this.tryAttack(p, this.getHeavyType(p));
         if (this.input.consume("uppercut")) this.tryAttack(p, this.getUppercutType(p));
-        if (this.input.consume("tornado")) this.tryAttack(p, "tornado");
+        if (this.input.consume("tornado")) this.tryAttack(p, this.getTornadoType(p));
         if (this.input.consume("special")) this.tryAttack(p, this.getSpecialType(p));
       }
     }
@@ -697,6 +697,10 @@
       if (fighter.style === "sword") return "bladeDive";
       const chain = fighter.comboChain.join(",");
       return chain.endsWith("shoryuken") ? "dragonDance" : "shoryuken";
+    }
+
+    getTornadoType(fighter) {
+      return fighter.style === "sword" ? "bladeWave" : "tornado";
     }
 
     getSpecialType(fighter) {
@@ -742,13 +746,13 @@
           this.cpuPlan = "punish";
           this.cpuMood = "punish";
         } else if (distanceX > 210) {
-          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? this.getSpecialType(cpu) : cpu.meter >= 25 && Math.random() < 0.22 ? "tornado" : "approach";
+          this.cpuPlan = Math.random() < 0.18 && cpu.meter >= 35 ? this.getSpecialType(cpu) : cpu.meter >= 25 && Math.random() < 0.22 ? this.getTornadoType(cpu) : "approach";
           this.cpuMood = "closing";
         } else if (distance < 66) {
           this.cpuPlan = Math.random() < 0.45 ? "throw" : Math.random() < 0.5 ? "low" : "retreat";
           this.cpuMood = "scramble";
         } else if (Math.random() < profile.aggression) {
-          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : cpu.meter >= 25 && Math.random() < 0.2 ? "tornado" : Math.random() < 0.18 ? this.getUppercutType(cpu) : Math.random() < 0.56 ? this.getLightType(cpu) : this.getHeavyType(cpu);
+          this.cpuPlan = cpu.meter >= 100 && Math.random() < 0.22 ? "super" : cpu.meter >= 25 && Math.random() < 0.2 ? this.getTornadoType(cpu) : Math.random() < 0.18 ? this.getUppercutType(cpu) : Math.random() < 0.56 ? this.getLightType(cpu) : this.getHeavyType(cpu);
           this.cpuMood = "attacking";
         } else {
           this.cpuPlan = Math.random() < 0.5 ? "guard" : "retreat";
@@ -1007,10 +1011,24 @@
     }
 
     spawnWave(fighter, type) {
-      const mesh = new THREE.Mesh(
-        type === "bladeWave" ? new THREE.BoxGeometry(0.18, 0.72, 0.04) : new THREE.SphereGeometry(type === "super" ? 0.34 : 0.22, 24, 16),
-        new THREE.MeshBasicMaterial({ color: type === "super" ? 0xffd166 : type === "bladeWave" ? 0xd8f2ff : 0x7df9ff, transparent: true, opacity: 0.78 })
-      );
+      let mesh;
+      if (type === "bladeWave") {
+        mesh = new THREE.Group();
+        const waveMaterial = new THREE.MeshBasicMaterial({ color: 0xd8f2ff, transparent: true, opacity: 0.82, depthWrite: false });
+        const edgeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88, depthWrite: false });
+        const outer = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 8, 60, Math.PI * 1.25), waveMaterial);
+        const inner = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.018, 8, 44, Math.PI * 1.1), edgeMaterial);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.58, 0.035), edgeMaterial);
+        outer.rotation.set(0, 0, -Math.PI * 0.62);
+        inner.rotation.set(0, 0, -Math.PI * 0.58);
+        blade.rotation.z = Math.PI / 2;
+        mesh.add(outer, inner, blade);
+      } else {
+        mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(type === "super" ? 0.34 : 0.22, 24, 16),
+          new THREE.MeshBasicMaterial({ color: type === "super" ? 0xffd166 : 0x7df9ff, transparent: true, opacity: 0.78 })
+        );
+      }
       mesh.rotation.y = fighter.yaw;
       this.projectileGroup.add(mesh);
       this.projectiles.push({
@@ -1622,9 +1640,10 @@
         rig.sword.rotation.set(1.66 - swing * 2.28, -0.72 + swing * 1.7, -1.85 + swing * 3.35);
         rig.sword.scale.set(1.14, 1.2, 1.08);
       } else if (fighter.state === "bladeWave") {
-        rig.sword.position.set(0.4, 1.2 + swing * 0.06, 0.72 + swing * 0.34);
-        rig.sword.rotation.set(Math.PI / 2 - swing * 0.8, 0.08, -0.28 + swing * 0.72);
-        rig.sword.scale.set(1.12, 1.22, 1.08);
+        const slash = 1 - Math.pow(1 - progress, 3);
+        rig.sword.position.set(-0.48 + slash * 1.18, 1.14 + swing * 0.05, 0.68 + swing * 0.22);
+        rig.sword.rotation.set(1.5 - swing * 0.16, -0.82 + slash * 1.64, -1.35 + slash * 2.7);
+        rig.sword.scale.set(1.16, 1.26, 1.08);
       } else if (fighter.state === "bladeDive") {
         const windup = Math.min(1, progress / 0.34);
         const chop = Math.max(0, Math.min(1, (progress - 0.34) / 0.3));
