@@ -509,6 +509,7 @@
 
     applyCosmetics() {
       Object.assign(this.player, fighterSkins[this.settings.fighter] || fighterSkins.ryu);
+      Object.assign(this.cpu, fighterSkins[this.settings.cpuFighter] || fighterSkins.ken);
     }
 
     startRound() {
@@ -774,7 +775,7 @@
         cpu.crouching = cpu.guard;
       }
       if (this.cpuPlan === "punish") {
-        if (distance < 125 && distanceZ < 52) this.tryAttack(cpu, "heavy");
+        if (distance < 125 && distanceZ < 52) this.tryAttack(cpu, this.getHeavyType(cpu));
         else cpu.vx = Math.sign(player.x - cpu.x) * profile.speed;
       }
       if (this.cpuPlan === "low") {

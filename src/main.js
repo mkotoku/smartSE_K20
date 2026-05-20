@@ -23,6 +23,7 @@
   const keyGrid = document.getElementById("keyGrid");
   const difficultySelect = document.getElementById("difficultySelect");
   const fighterSelect = document.getElementById("fighterSelect");
+  const cpuFighterSelect = document.getElementById("cpuFighterSelect");
   const stageSelect = document.getElementById("stageSelect");
   const volumeSlider = document.getElementById("volumeSlider");
 
@@ -99,6 +100,7 @@
   function renderSettings() {
     difficultySelect.value = save.settings.difficulty;
     fighterSelect.value = save.settings.fighter;
+    cpuFighterSelect.value = save.settings.cpuFighter;
     stageSelect.value = save.settings.stage;
     volumeSlider.value = save.settings.volume;
     keyGrid.innerHTML = "";
@@ -133,6 +135,11 @@
 
   fighterSelect.addEventListener("change", () => {
     save.settings.fighter = fighterSelect.value;
+    saveGame(save);
+  });
+
+  cpuFighterSelect.addEventListener("change", () => {
+    save.settings.cpuFighter = cpuFighterSelect.value;
     saveGame(save);
   });
 

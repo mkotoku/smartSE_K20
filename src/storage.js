@@ -13,6 +13,7 @@
     settings: {
       difficulty: "normal",
       fighter: "ryu",
+      cpuFighter: "ken",
       stage: "metro",
       volume: 0.5,
       keys: {
@@ -45,6 +46,7 @@
       settings: {
         difficulty: raw.settings?.difficulty || base.settings.difficulty,
         fighter: raw.settings?.fighter || base.settings.fighter,
+        cpuFighter: raw.settings?.cpuFighter || base.settings.cpuFighter,
         stage: raw.settings?.stage || base.settings.stage,
         volume: Number.isFinite(raw.settings?.volume) ? raw.settings.volume : base.settings.volume,
         keys: Object.assign(base.settings.keys, raw.settings?.keys || {})
