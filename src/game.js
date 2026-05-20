@@ -1457,7 +1457,7 @@
           rig.head.position.y += charge * 0.1;
           rig.group.scale.setScalar(1 + charge * (fighter.state === "super" ? 0.18 : 0.1));
           if (fighter.state === "shoryuken" || fighter.state === "dragonDance") {
-            const spin = progress * Math.PI * (fighter.state === "dragonDance" ? 7 : 3.2);
+            const spin = progress * Math.PI * (fighter.state === "dragonDance" ? 7 : 2);
             const punchDrive = Math.sin(Math.min(1, progress * 1.45) * Math.PI);
             const punchTop = 1.98 + punchDrive * (fighter.state === "dragonDance" ? 0.18 : 0.28);
             const punchForward = 0.22 + punchDrive * 0.26;
