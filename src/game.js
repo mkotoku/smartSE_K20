@@ -816,6 +816,31 @@
 
     spawnSpecialFlare(fighter, type) {
       const color = type === "super" ? 0xfff4a8 : type === "tornado" ? 0xffd166 : type === "bladeWave" || type === "bladeDive" ? 0xd8f2ff : type === "shoryuken" || type === "dragonDance" ? 0xff8a2a : 0x7df9ff;
+      if (type === "shoryuken") {
+        for (let i = 0; i < 10; i++) {
+          const spark = new THREE.Mesh(
+            new THREE.BoxGeometry(0.04, 0.11, 0.04),
+            new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffffff : color, transparent: true, opacity: 0.88, depthWrite: false })
+          );
+          const lift = 72 + i * 10;
+          spark.rotation.set(Math.random() * 0.8, fighter.yaw + (Math.random() - 0.5) * 0.25, Math.random() * 0.8);
+          this.effectGroup.add(spark);
+          this.effects.push({
+            x: fighter.x + fighter.forwardX * (26 + i * 2) + (Math.random() - 0.5) * 8,
+            y: fighter.y - lift,
+            z: fighter.z + fighter.forwardZ * (26 + i * 2) + (Math.random() - 0.5) * 8,
+            vx: fighter.forwardX * 1.1,
+            vy: -2.6 - i * 0.06,
+            vz: fighter.forwardZ * 1.1,
+            life: 0.18 + i * 0.012,
+            maxLife: 0.28,
+            spin: (Math.random() - 0.5) * 7,
+            grow: 0.45,
+            mesh: spark
+          });
+        }
+        return;
+      }
       const center = this.toWorld(fighter.x, fighter.y - 76, fighter.z);
       const ringCount = type === "super" ? 4 : type === "dragonDance" ? 6 : type === "tornado" ? 5 : type === "bladeDive" ? 5 : 3;
       for (let i = 0; i < ringCount; i++) {
@@ -1095,9 +1120,18 @@
         return;
       }
       const blocked = !attacker.attack.unblockable && defender.guard && this.isFacing(defender, attacker) && defender.onGround;
-      const sparkX = attacker.x + attacker.forwardX * (attacker.attack.range + 20);
-      const sparkY = attackBox.y + attackBox.height * 0.45;
-      const sparkZ = attacker.z + attacker.forwardZ * (attacker.attack.range + 20);
+      let sparkX = attacker.x + attacker.forwardX * (attacker.attack.range + 20);
+      let sparkY = attackBox.y + attackBox.height * 0.45;
+      let sparkZ = attacker.z + attacker.forwardZ * (attacker.attack.range + 20);
+      if (attacker.attack.name === "shoryuken") {
+        const total = attacker.attack.startup + attacker.attack.active + attacker.attack.recovery;
+        const progress = Math.min(1, attacker.attackTimer / total);
+        const punchDrive = Math.sin(Math.min(1, progress * 1.45) * Math.PI);
+        const punchForward = 28 + punchDrive * 24;
+        sparkX = attacker.x + attacker.forwardX * punchForward;
+        sparkY = attacker.y - (182 + punchDrive * 26);
+        sparkZ = attacker.z + attacker.forwardZ * punchForward;
+      }
       this.applyHit(attacker, defender, attacker.attack, blocked, sparkX, sparkY, sparkZ);
       if (attacker.attack.multiHit) {
         attacker.attackHitCount += 1;
@@ -1697,22 +1731,28 @@
       const size = attack.name === "light" || attack.name === "crouchLight" ? 0.58 : attack.name === "bladeLight" ? 1.0 : attack.name === "heavy" || attack.name === "crouchHeavy" ? 0.86 : attack.name === "bladeHeavy" || attack.name === "bladeWave" ? 1.32 : attack.name === "bladeDive" ? 1.46 : attack.name === "shoryuken" ? 1.25 : attack.name === "dragonDance" ? 1.5 : attack.name === "tornado" ? 1.18 : attack.name === "super" ? 1.45 : 1.05;
       const forward = 0.48 + reach * 0.36 + Math.sin(progress * Math.PI) * 0.22;
       const lateral = attack.name === "heavy" ? Math.sin(progress * Math.PI * 2) * 0.08 : 0;
+      const isRisingDragon = attack.name === "shoryuken";
 
       rig.attack.scale.set(reach * size, attack.height / 92, (attack.depth || 80) / 72);
       rig.attack.position.set(lateral, attack.level === "low" ? 0.42 : 0.98, forward);
       rig.attack.material.color.set(color);
-      rig.attack.material.opacity = isActive ? 0.42 : 0.18;
+      rig.attack.material.opacity = isRisingDragon ? 0 : isActive ? 0.42 : 0.18;
 
-      rig.attackCore.position.set(lateral, (attack.level === "low" ? 0.48 : 1.08) + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
-      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "dragonDance" ? 1.7 : attack.name === "bladeDive" ? 1.65 : attack.name === "shoryuken" ? 1.45 : attack.name === "tornado" ? 1.5 : attack.name === "special" || attack.name === "bladeWave" ? 1.35 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.08 : 0.82);
+      if (isRisingDragon) {
+        rig.attackCore.position.copy(rig.handR.position);
+        rig.attackCore.position.z += 0.05;
+      } else {
+        rig.attackCore.position.set(lateral, (attack.level === "low" ? 0.48 : 1.08) + Math.sin(progress * Math.PI) * 0.16, forward + 0.28);
+      }
+      rig.attackCore.scale.setScalar(attack.name === "super" ? 1.9 : attack.name === "dragonDance" ? 1.7 : attack.name === "bladeDive" ? 1.65 : attack.name === "shoryuken" ? 0.72 : attack.name === "tornado" ? 1.5 : attack.name === "special" || attack.name === "bladeWave" ? 1.35 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.08 : 0.82);
       rig.attackCore.material.color.set(color);
-      rig.attackCore.material.opacity = isActive ? 0.95 : 0.45;
+      rig.attackCore.material.opacity = isRisingDragon ? (isActive ? 0.74 : 0.32) : isActive ? 0.95 : 0.45;
 
       rig.attackRing.position.copy(rig.attackCore.position);
       rig.attackRing.rotation.set(Math.PI / 2, 0, progress * Math.PI * 3);
-      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "dragonDance" ? 1.55 : attack.name === "bladeDive" ? 1.5 : attack.name === "shoryuken" ? 1.38 : attack.name === "tornado" ? 1.45 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.25 : 1);
+      rig.attackRing.scale.setScalar(attack.name === "super" ? 1.75 : attack.name === "dragonDance" ? 1.55 : attack.name === "bladeDive" ? 1.5 : attack.name === "shoryuken" ? 0.42 : attack.name === "tornado" ? 1.45 : attack.name === "heavy" || attack.name === "bladeHeavy" ? 1.25 : 1);
       rig.attackRing.material.color.set(color);
-      rig.attackRing.material.opacity = isActive ? 0.9 : 0.34;
+      rig.attackRing.material.opacity = isRisingDragon ? (isActive ? 0.36 : 0.12) : isActive ? 0.9 : 0.34;
 
       rig.attackLabel.position.set(0, 2.0, 0);
       this.drawAttackLabel(rig, attack.label.toUpperCase(), color, isActive);
